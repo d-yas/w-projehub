@@ -1,7 +1,7 @@
 Option Explicit
 
 ' ============================================================================
-'  KaizenOneri.xlsm -- ThisWorkbook
+'  ProjeOneri.xlsm -- ThisWorkbook
 '
 '  Kitap her acildiginda kapali konuma doner: yalnizca Giris ekrani gorunur.
 '  Dosya nasil kaydedilmis olursa olsun sifre kapisi atlanamaz.

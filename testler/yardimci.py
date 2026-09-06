@@ -67,19 +67,18 @@ def yil():
 
 
 class Ortam:
-    """Gecici bir 'kaizen\\' paylasim klasoru ve icindeki iki kitap."""
+    """Gecici bir 'projeoneri\\' paylasim klasoru ve icindeki iki kitap."""
 
     def __init__(self, kok):
         self.kok = kok
-        self.kaizen = os.path.join(kok, "kaizen")
-        self.yonetim = os.path.join(self.kaizen, "yonetim")
+        self.paylasim = os.path.join(kok, "projeoneri")
+        self.yonetim = os.path.join(self.paylasim, "yonetim")
         # Gonderimlerin TEK ve kalici yeri. Ayri bir "gelen kutusu" yoktur:
         # personel dogrudan buraya yazar ama icini goremez.
         self.oneriler = os.path.join(self.yonetim, "oneriler")
         self.degerlendirme = os.path.join(self.yonetim, "degerlendirme")
-        self.rapor = os.path.join(self.yonetim, "rapor")
-        self.oneri_kitap = os.path.join(self.kaizen, "KaizenOneri.xlsm")
-        self.yonetim_kitap = os.path.join(self.yonetim, "KaizenYonetim.xlsm")
+        self.oneri_kitap = os.path.join(self.paylasim, "ProjeOneri.xlsm")
+        self.yonetim_kitap = os.path.join(self.yonetim, "ProjeYonetim.xlsm")
 
     def oneriler_yil(self, y=None):
         return os.path.join(self.oneriler, str(y or yil()))
@@ -123,23 +122,22 @@ def bom_var_mi(yol):
 @contextmanager
 def ortam(yonetim_de=True):
     """OneDrive disinda gecici bir ortak klasor kurar, is bitince siler."""
-    kok = tempfile.mkdtemp(prefix="kaizen_test_")
+    kok = tempfile.mkdtemp(prefix="proje_test_")
     o = Ortam(kok)
     try:
         os.makedirs(o.oneriler_yil(), exist_ok=True)
         os.makedirs(o.yonetim, exist_ok=True)
         os.makedirs(o.degerlendirme_yil(), exist_ok=True)
-        os.makedirs(o.rapor, exist_ok=True)
-
-        kaynak_oneri = os.path.join(CIKTI, "KaizenOneri.xlsm")
+    
+        kaynak_oneri = os.path.join(CIKTI, "ProjeOneri.xlsm")
         if not os.path.exists(kaynak_oneri):
-            raise SystemExit("cikti\\KaizenOneri.xlsm yok. Önce: python kur.py")
+            raise SystemExit("cikti\\ProjeOneri.xlsm yok. Önce: python kur.py")
         shutil.copy2(kaynak_oneri, o.oneri_kitap)
 
         if yonetim_de:
-            kaynak_yonetim = os.path.join(CIKTI, "yonetim", "KaizenYonetim.xlsm")
+            kaynak_yonetim = os.path.join(CIKTI, "yonetim", "ProjeYonetim.xlsm")
             if not os.path.exists(kaynak_yonetim):
-                raise SystemExit("cikti\\yonetim\\KaizenYonetim.xlsm yok. "
+                raise SystemExit("cikti\\yonetim\\ProjeYonetim.xlsm yok. "
                                  "Önce: python kur.py")
             shutil.copy2(kaynak_yonetim, o.yonetim_kitap)
 
@@ -174,7 +172,7 @@ def excel(gorunur=False):
 def kitap(app, yol, salt_okunur=False):
     """Kitabi acar.
 
-    salt_okunur=True uretimdeki durumu taklit eder: KaizenOneri.xlsm tum
+    salt_okunur=True uretimdeki durumu taklit eder: ProjeOneri.xlsm tum
     personel icin salt okunurdur, boylece ilk acan dosyayi kilitlemez.
     Salt okunur acilan bir kitap bellekte duzenlenebilir (form doldurulabilir,
     makrolar ortak klasore yazabilir); yalnizca kitabin kendisi kaydedilemez.
@@ -230,20 +228,7 @@ def son_mesaj(app, wb):
         return ""
 
 
-def sifreli_ac(app, yol, parola):
-    """Parolali bir kitabi acar.
-
-    TUZAK: Workbooks.Open cagrisinda `Password=` ADLI argumani pywin32'nin
-    dinamik dispatch'i sessizce dusuruyor; Excel de parolayi almadigi icin
-    gorunmez bir parola diyalogu acip kilitleniyor. Bu yuzden parametreler
-    KONUMSAL verilir:
-        Open(Filename, UpdateLinks, ReadOnly, Format, Password, WriteResPassword,
-             IgnoreReadOnlyRecommended, ...)
-    """
-    return app.Workbooks.Open(os.path.abspath(yol), 0, True, None, parola, "", True)
-
-
-KORUMA_SIFRESI = "kzn-koruma"          # modAyar.SIFRE_KORUMA ile aynı
+KORUMA_SIFRESI = "po-koruma"          # modAyar.SIFRE_KORUMA ile aynı
 
 
 def korumasiz(ws):

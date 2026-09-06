@@ -17,14 +17,13 @@ Option Explicit
 Private Const GECMIS_ILK_SATIR As Long = 34
 Private Const GECMIS_AZAMI As Long = 14
 Private Const GECMIS_ILK_SUTUN As Long = 2     ' B
+' F dahil: not sutunu E:F birlesiktir ve ClearContents birlesimin yalnizca
+' bir parcasi uzerinde calistirilamaz.
 Private Const GECMIS_SON_SUTUN As Long = 6     ' F
 
 Private Function OlayAlanlari() As Variant
     OlayAlanlari = Array("sema", "oneri_no", "olay_tarihi", _
-                         "yeni_durum", _
-                         "etki_puani", "efor_puani", _
-                         "yillik_saat_kazanimi", "yillik_tl_tasarrufu", _
-                         "karar_notu", _
+                         "yeni_durum", "karar_notu", _
                          "degerlendiren_kullanici", "degerlendiren_bilgisayar")
 End Function
 
@@ -33,13 +32,13 @@ End Function
 '  DUGME EYLEMLERI
 ' ###########################################################################
 
-' Konsoldaki secili satiri degerlendirme ekraninda acar.
+' Listedeki secili satiri degerlendirme ekraninda acar.
 Public Sub SeciliyiDegerlendir()
     Dim ws As Object, no As String
 
-    Set ws = modKonsolide.KonsolSayfasi()
+    Set ws = modKonsolide.ListeSayfasi()
     If StrComp(ActiveSheet.Name, ws.Name, vbTextCompare) <> 0 Then
-        modUI.SayfaGoster modUI.SAYFA_KONSOL
+        modUI.SayfaGoster modUI.SAYFA_LISTE
         modUI.Bilgi "Önce listeden bir öneri satırı seçin, sonra " & _
                     "“Seçiliyi Değerlendir” düğmesine basın.", "Değerlendirme"
         Exit Sub
@@ -56,8 +55,8 @@ Public Sub SeciliyiDegerlendir()
     OneriyiAc no
 End Sub
 
-Public Sub KonsolaDon()
-    modUI.SayfaGoster modUI.SAYFA_KONSOL
+Public Sub ListeyeDon()
+    modUI.SayfaGoster modUI.SAYFA_LISTE
 End Sub
 
 ' Degerlendirmeyi yeni bir olay dosyasi olarak kaydeder.
@@ -70,7 +69,7 @@ Public Sub DegerlendirmeKaydet()
 
     If Len(no) = 0 Then
         modUI.Hata "Ekranda açık bir öneri yok." & vbCrLf & vbCrLf & _
-                   "Konsoldan bir öneri seçip “Seçiliyi Değerlendir” " & _
+                   "Listeden bir öneri seçip “Seçiliyi Değerlendir” " & _
                    "düğmesine basın.", "Değerlendirme"
         Exit Sub
     End If
@@ -141,14 +140,9 @@ Public Sub OneriyiAc(ByVal oneriNo As String)
     ' Giris alanlari son bilinen degerle acilir; ekip yalnizca degistirdigini
     ' duzeltir, her seferinde bastan doldurmaz.
     ws.Range("dg_yeni_durum").Value = veri(i, modKonsolide.V_DURUM)
-    ws.Range("dg_etki").Value = modKonsolide.BosDegilse(veri(i, modKonsolide.V_ETKI))
-    ws.Range("dg_efor").Value = modKonsolide.BosDegilse(veri(i, modKonsolide.V_EFOR))
-    ws.Range("dg_saat").Value = modKonsolide.BosDegilse(veri(i, modKonsolide.V_SAAT))
-    ws.Range("dg_tl").Value = modKonsolide.BosDegilse(veri(i, modKonsolide.V_TL))
     ws.Range("dg_not").Value = ""
     modUI.KorumaAc ws
 
-    OncelikGoster ws                              ' korumasini kendi yonetir
     GecmisiYaz ws, oneriNo
     modUI.BantTemizle ws, "dg_bant"
 
@@ -170,35 +164,6 @@ Hata:
                hataMetni, "Değerlendirme"
 End Sub
 
-' Etki/efor puanlarindan oncelik sinifini gosterir. Formul yerine VBA
-' kullanilir: sinif kurali modModel'de tek yerde durur, ekranda kopyasi olmaz.
-'
-' Oncelik hucresi KILITLIDIR (hesaplanan bir degerdir, elle girilmez), bu
-' yuzden yazmadan once koruma acilir. Sayfa korumasini bu yordam kendi yonetir;
-' disaridan sarmalanmasi gerekmez.
-Public Sub OncelikGoster(Optional ByVal ws As Object = Nothing)
-    Dim s As String, etki As Long, efor As Long, hucre As Range
-
-    If ws Is Nothing Then Set ws = DegerlendirmeSayfasi()
-    etki = SayiOku(ws.Range("dg_etki").Value)
-    efor = SayiOku(ws.Range("dg_efor").Value)
-    s = modModel.OncelikSinifi(etki, efor)
-
-    modUI.KorumaKapa ws
-    Set hucre = ws.Range("dg_oncelik")
-    If Len(s) = 0 Then
-        hucre.Value = "— puanlanmadı —"
-        hucre.Interior.Color = modTasarim.HexRGB(modTasarim.CLR_BUZ_ZEMIN)
-        hucre.Font.Color = modTasarim.HexRGB(modTasarim.CLR_METIN_GRI)
-        hucre.Font.Bold = False
-        hucre.HorizontalAlignment = xlCenter
-    Else
-        hucre.Value = s
-        modTasarim.OncelikRozetiUygula hucre, s
-    End If
-    modUI.KorumaAc ws
-End Sub
-
 Private Sub GecmisiYaz(ByVal ws As Object, ByVal oneriNo As String)
     Dim kayit As Object, toplam As Collection
     Dim satir As Long, tablo() As Variant, n As Long, i As Long
@@ -218,7 +183,7 @@ Private Sub GecmisiYaz(ByVal ws As Object, ByVal oneriNo As String)
     End If
 
     ' Son olaylar ustte gorunsun; ekrana sigmayan eski olaylar dosyada durur.
-    ReDim tablo(1 To WorksheetFunction.Min(n, GECMIS_AZAMI), 1 To 5)
+    ReDim tablo(1 To WorksheetFunction.Min(n, GECMIS_AZAMI), 1 To 4)
     satir = 0
     For i = n To 1 Step -1
         If satir >= GECMIS_AZAMI Then Exit For
@@ -229,9 +194,7 @@ Private Sub GecmisiYaz(ByVal ws As Object, ByVal oneriNo As String)
         tablo(satir, 1) = OlayTarihiGoster(modDosyaIO.Al(kayit, "olay_tarihi"))
         tablo(satir, 2) = modDosyaIO.Al(kayit, "degerlendiren_kullanici")
         tablo(satir, 3) = modDosyaIO.Al(kayit, "yeni_durum")
-        tablo(satir, 4) = PuanGoster(modDosyaIO.Al(kayit, "etki_puani"), _
-                                     modDosyaIO.Al(kayit, "efor_puani"))
-        tablo(satir, 5) = modDosyaIO.Al(kayit, "karar_notu")
+        tablo(satir, 4) = modDosyaIO.Al(kayit, "karar_notu")
 SonrakiOlay:
     Next i
 
@@ -242,7 +205,13 @@ SonrakiOlay:
         Exit Sub
     End If
 
-    ws.Cells(GECMIS_ILK_SATIR, GECMIS_ILK_SUTUN).Resize(satir, 5).Value = tablo
+    ' Not sutunu birlesik oldugu icin blok yazma reddedilir; sutun sutun yazilir.
+    Dim r As Long, c As Long
+    For r = 1 To satir
+        For c = 1 To 4
+            ws.Cells(GECMIS_ILK_SATIR + r - 1, GECMIS_ILK_SUTUN + c - 1).Value = tablo(r, c)
+        Next c
+    Next r
 
     If n > GECMIS_AZAMI Then
         ws.Cells(GECMIS_ILK_SATIR + GECMIS_AZAMI - 1, GECMIS_SON_SUTUN).Value = _
@@ -250,11 +219,6 @@ SonrakiOlay:
     End If
     modUI.KorumaAc ws
 End Sub
-
-Private Function PuanGoster(ByVal etki As String, ByVal efor As String) As String
-    If Len(etki) = 0 And Len(efor) = 0 Then Exit Function
-    PuanGoster = "etki " & etki & " / efor " & efor
-End Function
 
 Private Function OlayTarihiGoster(ByVal isoTarih As String) As String
     If Len(isoTarih) >= 16 Then
@@ -280,10 +244,6 @@ Private Function EkrandanOku(ByVal ws As Object, ByVal oneriNo As String) As Obj
     sozluk("oneri_no") = oneriNo
     sozluk("olay_tarihi") = Format$(Now, "yyyy-mm-dd") & "T" & Format$(Now, "hh:nn:ss")
     sozluk("yeni_durum") = Trim$(CStr(ws.Range("dg_yeni_durum").Value & ""))
-    sozluk("etki_puani") = SayiMetni(ws.Range("dg_etki").Value)
-    sozluk("efor_puani") = SayiMetni(ws.Range("dg_efor").Value)
-    sozluk("yillik_saat_kazanimi") = SayiMetni(ws.Range("dg_saat").Value)
-    sozluk("yillik_tl_tasarrufu") = SayiMetni(ws.Range("dg_tl").Value)
     sozluk("karar_notu") = Trim$(CStr(ws.Range("dg_not").Value & ""))
     sozluk("degerlendiren_kullanici") = Environ$("USERNAME")
     sozluk("degerlendiren_bilgisayar") = Environ$("COMPUTERNAME")
@@ -292,7 +252,7 @@ Private Function EkrandanOku(ByVal ws As Object, ByVal oneriNo As String) As Obj
 End Function
 
 Private Function Dogrula(ByVal sozluk As Object) As String
-    Dim durum As String, etki As Long, efor As Long
+    Dim durum As String
 
     durum = modDosyaIO.Al(sozluk, "yeni_durum")
     If Len(durum) = 0 Then
@@ -302,23 +262,6 @@ Private Function Dogrula(ByVal sozluk As Object) As String
     If Not modModel.DurumGecerliMi(durum) Then
         Dogrula = "Geçersiz durum: " & durum
         Exit Function
-    End If
-
-    etki = SayiOku(modDosyaIO.Al(sozluk, "etki_puani"))
-    efor = SayiOku(modDosyaIO.Al(sozluk, "efor_puani"))
-    If etki < 0 Or etki > 5 Or efor < 0 Or efor > 5 Then
-        Dogrula = "Etki ve efor puanları 1 ile 5 arasında olmalıdır."
-        Exit Function
-    End If
-
-    ' Kabul edilen bir oneri puanlanmadan ilerlerse oncelik matrisi ve pano
-    ' bos kalir; bu asamada puanlama zorunlu tutulur.
-    If modModel.KabulEdildiMi(durum) Then
-        If etki = 0 Or efor = 0 Then
-            Dogrula = "“" & durum & "” durumuna geçmeden önce etki ve efor " & _
-                      "puanlarını (1–5) girin."
-            Exit Function
-        End If
     End If
 
     If StrComp(durum, modModel.DURUM_REDDEDILDI, vbTextCompare) = 0 Then
@@ -378,30 +321,11 @@ Public Function DegerlendirmeSayfasi() As Object
     Set DegerlendirmeSayfasi = ThisWorkbook.Worksheets(modUI.SAYFA_DEGERLENDIRME)
 End Function
 
-Private Function SayiOku(ByVal v As Variant) As Long
-    If IsNumeric(v) Then SayiOku = CLng(Val(v)) Else SayiOku = 0
-End Function
-
-Private Function SayiMetni(ByVal v As Variant) As String
-    If IsNumeric(v) Then
-        If Val(v) = 0 Then
-            SayiMetni = ""
-        Else
-            ' Ondalik ayraci makine ayarindan bagimsiz olsun: dosyada nokta.
-            SayiMetni = Replace(CStr(CDbl(v)), ",", ".")
-        End If
-    Else
-        SayiMetni = ""
-    End If
-End Function
-
 
 ' ###########################################################################
 '  TESTLER ICIN -- ekran olmadan degerlendirme
 ' ###########################################################################
 Public Function TestDegerlendirmesi(ByVal oneriNo As String, ByVal durum As String, _
-                                    ByVal etki As Long, ByVal efor As Long, _
-                                    ByVal saat As Double, ByVal tl As Double, _
                                     ByVal notu As String) As String
     Dim sozluk As Object, hedefDosya As String
 
@@ -412,10 +336,6 @@ Public Function TestDegerlendirmesi(ByVal oneriNo As String, ByVal durum As Stri
     sozluk("oneri_no") = oneriNo
     sozluk("olay_tarihi") = Format$(Now, "yyyy-mm-dd") & "T" & Format$(Now, "hh:nn:ss")
     sozluk("yeni_durum") = durum
-    sozluk("etki_puani") = IIf(etki = 0, "", CStr(etki))
-    sozluk("efor_puani") = IIf(efor = 0, "", CStr(efor))
-    sozluk("yillik_saat_kazanimi") = IIf(saat = 0, "", Replace(CStr(saat), ",", "."))
-    sozluk("yillik_tl_tasarrufu") = IIf(tl = 0, "", Replace(CStr(tl), ",", "."))
     sozluk("karar_notu") = notu
     sozluk("degerlendiren_kullanici") = Environ$("USERNAME")
     sozluk("degerlendiren_bilgisayar") = Environ$("COMPUTERNAME")

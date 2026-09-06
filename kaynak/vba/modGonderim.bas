@@ -89,7 +89,7 @@ Hata:
     modUI.Hata "Öneri kaydedilemedi." & vbCrLf & vbCrLf & _
                Err.Description & vbCrLf & vbCrLf & _
                "Ortak klasöre erişiminiz olduğundan emin olun; sorun " & _
-               "sürerse Kaizen ekibine başvurun.", "Gönderim hatası"
+               "sürerse Değerlendirme ekibine başvurun.", "Gönderim hatası"
 End Sub
 
 ' "Temizle" dugmesi -- form sayfasi
@@ -170,19 +170,22 @@ Private Function KaydiYaz(ByVal sozluk As Object) As String
 End Function
 
 ' ---------------------------------------------------------------------------
-'  Oneri numarasi:  ON-260904-A7K
+'  Oneri numarasi:  PRJ-26A7K   (PRJ - yil - uc rastgele karakter)
 '
-'  Once "KZN-20260904-101151-42BD" biciminde, 24 karakterdi. Kisaltildi:
-'  telefonda soylenebilmeli, elle yazilabilmeli, bir yere not edilebilmeli.
+'  Telefonda soylenebilmeli, elle yazilabilmeli, bir yere not edilebilmeli.
 '
 '  Sirali numara (000001) kullanilamaz: sirali sayac ortak bir dosya
-'  gerektirir, o da "kimse ortak dosyaya yazmaz" kuralini bozar. Tarih +
-'  rastgele ek, merkezi bir sayac olmadan benzersizligi saglar; kalan kucuk
-'  catisma ihtimalini de KaydiYaz'daki yeniden deneme kapatir.
+'  gerektirir, o da "kimse ortak dosyaya yazmaz" kuralini bozar. Rastgele
+'  ek, merkezi bir sayac olmadan benzersizligi saglar; ayni yil icindeki
+'  kalan catisma ihtimalini KaydiYaz'daki yeniden deneme kapatir.
+'
+'  Yil neden duruyor: dosyalar yil klasorlerine yazilir ve "varsa
+'  olusturma" kontrolu yalnizca ayni klasorde calisir. Yil olmasaydi iki
+'  farkli yilda uretilen ayni numara sessizce iki oneriye verilirdi.
 ' ---------------------------------------------------------------------------
 Public Function OneriNoUret() As String
-    OneriNoUret = modAyar.ONEK_ONERI_NO & "-" & Format$(Now, "yymmdd") & _
-                  "-" & modDosyaIO.KisaRastgele(3)
+    OneriNoUret = modAyar.ONEK_ONERI_NO & "-" & Format$(Now, "yy") & _
+                  modDosyaIO.KisaRastgele(3)
 End Function
 
 

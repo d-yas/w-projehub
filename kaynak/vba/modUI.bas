@@ -11,10 +11,9 @@ Option Explicit
 
 Public Const SAYFA_GIRIS As String = "Giriş"
 Public Const SAYFA_FORM As String = "Öneri Formu"
-Public Const SAYFA_KONSOL As String = "Konsol"
+Public Const SAYFA_LISTE As String = "Liste"
 Public Const SAYFA_DEGERLENDIRME As String = "Değerlendirme"
 Public Const SAYFA_PANO As String = "Pano"
-Public Const SAYFA_RAPOR As String = "Rapor"
 Public Const SAYFA_LISTELER As String = "Listeler"
 Public Const SAYFA_PANOVERI As String = "PanoVeri"
 Public Const SAYFA_VERI As String = "Veri"
@@ -203,7 +202,7 @@ End Sub
 '  MESAJLAR
 ' ###########################################################################
 
-Public Sub Bilgi(ByVal metin As String, Optional ByVal baslik As String = "Kaizen")
+Public Sub Bilgi(ByVal metin As String, Optional ByVal baslik As String = "Proje Öneri")
     If m_sessiz Then
         MesajKaydet "bilgi", metin
         Exit Sub
@@ -211,7 +210,7 @@ Public Sub Bilgi(ByVal metin As String, Optional ByVal baslik As String = "Kaize
     MsgBox metin, vbInformation Or vbOKOnly, baslik
 End Sub
 
-Public Sub Hata(ByVal metin As String, Optional ByVal baslik As String = "Kaizen")
+Public Sub Hata(ByVal metin As String, Optional ByVal baslik As String = "Proje Öneri")
     If m_sessiz Then
         MesajKaydet "hata", metin
         Exit Sub
@@ -219,7 +218,7 @@ Public Sub Hata(ByVal metin As String, Optional ByVal baslik As String = "Kaizen
     MsgBox metin, vbExclamation Or vbOKOnly, baslik
 End Sub
 
-Public Function Onay(ByVal metin As String, Optional ByVal baslik As String = "Kaizen") As Boolean
+Public Function Onay(ByVal metin As String, Optional ByVal baslik As String = "Proje Öneri") As Boolean
     If m_sessiz Then
         MesajKaydet "onay", metin
         Onay = True

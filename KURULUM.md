@@ -21,8 +21,8 @@ python kur.py
 Çıktı:
 
 ```
-cikti\KaizenOneri.xlsm
-cikti\yonetim\KaizenYonetim.xlsm
+cikti\ProjeOneri.xlsm
+cikti\yonetim\ProjeYonetim.xlsm
 ```
 
 `kur.py` Excel'in **“VBA proje nesne modeline erişime güven”** ayarını geçici
@@ -41,19 +41,18 @@ kurum ilkesiyle kilitliyse üretim o makinede yapılamaz; başka bir makinede
 
 ## 2. Klasör yapısını kur
 
-Ağ paylaşımında şu yapıyı oluşturun (örnek: `\\sunucu\paylasim\kaizen`):
+Ağ paylaşımında şu yapıyı oluşturun (örnek: `\\sunucu\paylasim\projeoneri`):
 
 ```
-kaizen\
-├── KaizenOneri.xlsm          ← cikti\KaizenOneri.xlsm
+projeoneri\
+├── ProjeOneri.xlsm          ← cikti\ProjeOneri.xlsm
 └── yonetim\
-    ├── KaizenYonetim.xlsm    ← cikti\yonetim\KaizenYonetim.xlsm
+    ├── ProjeYonetim.xlsm    ← cikti\yonetim\ProjeYonetim.xlsm
     ├── oneriler\             ← gönderimlerin TEK ve kalıcı yeri (madde 3)
-    ├── degerlendirme\
-    └── rapor\
+    └── degerlendirme\
 ```
 
-Personelin `kaizen\` altında gördüğü tek şey çalışma kitabı ve `yonetim\`
+Personelin `projeoneri\` altında gördüğü tek şey çalışma kitabı ve `yonetim\`
 klasörünün **adıdır**; içine bakamaz.
 
 **Ayrı bir “gelen kutusu” yoktur.** Personel doğrudan `yonetim\oneriler\`
@@ -77,13 +76,13 @@ VBA içindeki şifreler gerçek bir sınır değildir (madde 6). Erişimi belirl
 
 | Klasör / dosya | Kimler | İzin |
 |---|---|---|
-| Klasör / dosya | Tüm personel | Kaizen ekibi |
+| Klasör / dosya | Tüm personel | Değerlendirme ekibi |
 |---|---|---|
-| `kaizen\` | Okuma + Çalıştırma | Tam denetim |
-| `kaizen\KaizenOneri.xlsm` | **Salt okunur** | Tam denetim |
-| `kaizen\yonetim\` | **Yalnızca geçiş** (listeleme yok) | Tam denetim |
-| `kaizen\yonetim\oneriler\` | **Bırakma kutusu** — aşağıya bakın | Tam denetim |
-| `yonetim\degerlendirme\`, `rapor\` | Hiçbir hak | Tam denetim |
+| `projeoneri\` | Okuma + Çalıştırma | Tam denetim |
+| `projeoneri\ProjeOneri.xlsm` | **Salt okunur** | Tam denetim |
+| `projeoneri\yonetim\` | **Yalnızca geçiş** (listeleme yok) | Tam denetim |
+| `projeoneri\yonetim\oneriler\` | **Bırakma kutusu** — aşağıya bakın | Tam denetim |
+| `yonetim\degerlendirme\` | Hiçbir hak | Tam denetim |
 
 ### `yonetim\oneriler\` — bırakma kutusu
 
@@ -98,28 +97,26 @@ verilir; *listeleme/okuma* ve *silme* hakkı **verilmez**. Sonuç:
 
 **Komutların sırası önemlidir: `yonetim\` EN SON kısıtlanır.** Ters sırada
 yaparsanız izin komutlarının kendisi çalışamaz hale gelir ve klasörler
-sessizce erişilemez kalır (`Personel` ve `Kaizen-Ekibi` yerine kendi grup
+sessizce erişilemez kalır (`Personel` ve `Degerlendirme-Ekibi` yerine kendi grup
 adlarınızı yazın):
 
 ```
-set K=\\sunucu\paylasim\kaizen
+set K=\\sunucu\paylasim\projeoneri
 
 REM 1) Önce bırakma kutusu
 icacls "%K%\yonetim\oneriler" /inheritance:r
-icacls "%K%\yonetim\oneriler" /grant "ALANADI\Kaizen-Ekibi:(OI)(CI)(F)"
+icacls "%K%\yonetim\oneriler" /grant "ALANADI\Degerlendirme-Ekibi:(OI)(CI)(F)"
 icacls "%K%\yonetim\oneriler" /grant "ALANADI\Personel:(OI)(CI)(WD,AD,X,RA,REA,WA,WEA,RC)"
 
 REM 2) Sonra yönetim tarafının geri kalanı -- personele hiçbir hak yok
-for %%D in (degerlendirme rapor) do (
-  icacls "%K%\yonetim\%%D" /inheritance:r
-  icacls "%K%\yonetim\%%D" /grant "ALANADI\Kaizen-Ekibi:(OI)(CI)(F)"
-)
-icacls "%K%\yonetim\KaizenYonetim.xlsm" /inheritance:r
-icacls "%K%\yonetim\KaizenYonetim.xlsm" /grant "ALANADI\Kaizen-Ekibi:(F)"
+icacls "%K%\yonetim\degerlendirme" /inheritance:r
+icacls "%K%\yonetim\degerlendirme" /grant "ALANADI\Degerlendirme-Ekibi:(OI)(CI)(F)"
+icacls "%K%\yonetim\ProjeYonetim.xlsm" /inheritance:r
+icacls "%K%\yonetim\ProjeYonetim.xlsm" /grant "ALANADI\Degerlendirme-Ekibi:(F)"
 
 REM 3) EN SON: yonetim\ -- personele yalnızca GEÇİŞ, miras bayrağı YOK
 icacls "%K%\yonetim" /inheritance:r
-icacls "%K%\yonetim" /grant "ALANADI\Kaizen-Ekibi:(OI)(CI)(F)"
+icacls "%K%\yonetim" /grant "ALANADI\Degerlendirme-Ekibi:(OI)(CI)(F)"
 icacls "%K%\yonetim" /grant "ALANADI\Personel:(X)"
 ```
 
@@ -146,7 +143,7 @@ boşaltabilir.
 > budur: yeniden adlandırma **silme** yetkisi ister ve bu izin modeliyle
 > bağdaşmaz (bkz. `TASARIM-VE-GEREKCE.md`, madde 4).
 
-### `KaizenOneri.xlsm` salt okunur olmalıdır
+### `ProjeOneri.xlsm` salt okunur olmalıdır
 
 Aksi halde dosyayı ilk açan kullanıcı kilitler ve ikinci kullanıcı
 “kullanımda” uyarısı alır. Salt okunur açılan bir kitap bellekte
@@ -155,7 +152,7 @@ kendisi kaydedilemez — zaten istenen budur.
 
 ### Bir de gizleme (isteğe bağlı)
 
-`attrib +h "\\sunucu\paylasim\kaizen\yonetim"` klasörü gözden uzak tutar.
+`attrib +h "\\sunucu\paylasim\projeoneri\yonetim"` klasörü gözden uzak tutar.
 Bu bir güvenlik sınırı **değildir** — asıl koruma yukarıdaki izinlerdir —
 ama klasörün merak uyandırmasını önler.
 
@@ -178,25 +175,32 @@ Ek olarak **MOTW (Mark of the Web)**: Ağdan gelen dosyalar bazı yapılandırma
 Konum tanımı çözer. Paylaşımın Intranet bölgesinde olması gerekir.
 
 Güvenilir Konum tanımı: *Dosya → Seçenekler → Güven Merkezi → Güven Merkezi
-Ayarları → Güvenilir Konumlar → Yeni konum ekle* → `\\sunucu\paylasim\kaizen`,
+Ayarları → Güvenilir Konumlar → Yeni konum ekle* → `\\sunucu\paylasim\projeoneri`,
 “Bu konumun alt klasörlerine de güven” işaretli. (Ağ konumlarına izin vermek
 için “Ağdaki güvenilir konumlara izin ver” kutusu da açılmalıdır.)
 
 ---
 
-## 5. Şifreleri değiştir
+## 5. Birim adını ve şifreleri değiştir
 
-Varsayılan ekran şifreleri `kaynak\vba\modAyar.bas` başındadır:
+**Birim adı** — ekranların üstündeki lacivert bantta solda yazar.
+`kaynak/tasarim.py` başındaki tek satırdır:
 
-```vba
-Public Const SIFRE_PERSONEL As String = "kaizen"
-Public Const SIFRE_YONETIM As String = "kaizen-yonetim"
+```python
+BIRIM_ADI = "XJ Birimi"
 ```
 
-Değiştirip `python kur.py` çalıştırın.
+**Ekran şifreleri** — `kaynak/vba/modAyar.bas` başındadır:
 
-Ekranların üstündeki başlık `kaynak\tasarim.py` içindeki `URUN_ADI`
-sabitindedir. Öneri numarasının öneki (`ON`) `modAyar.bas` içindeki
+```vba
+Public Const SIFRE_PERSONEL As String = "proje"
+Public Const SIFRE_YONETIM As String = "proje-yonetim"
+```
+
+İkisini de değiştirdikten sonra `python kur.py` çalıştırın; kitaplar yeni
+değerlerle baştan üretilir.
+
+Öneri numarasının öneki (`PRJ`) `modAyar.bas` içindeki
 `ONEK_ONERI_NO` sabitidir. Durum listesini değiştirecekseniz `modModel.bas`
 içindeki `Durumlar()` ile `kur.py` içindeki `listeler()` işlevini birlikte
 düzenleyin — `python testler\test_uretim.py` ikisinin aynı kaldığını denetler.
@@ -211,12 +215,8 @@ düzenleyin — `python testler\test_uretim.py` ikisinin aynı kaldığını den
 | Yönetim şifresi | **Hayır** | VBA içinde düz metin |
 | Sayfa/kitap koruması | **Hayır** | Kazara bozmayı önler |
 | NTFS klasör izinleri | **Evet** | Asıl erişim denetimi |
-| Rapor parolası | **Evet** | Excel'in ECMA-376 AES şifrelemesi |
 
 Ekran şifrelerinin işlevi “yanlış ekrana yanlışlıkla girmeyi” önlemektir.
-Rapor parolası koda gömülü değildir: rapor üretilirken sorulur ve hiçbir yere
-kaydedilmez. Bu yüzden kitabı ele geçiren biri raporu açamaz — ama parolayı
-kaybederseniz rapor da kurtarılamaz.
 
 ---
 
@@ -229,27 +229,25 @@ makrolar COM üzerinden çağrılır; bu yol Excel'in makro güvenlik ayarını,
 
 Kurulumdan sonra aşağıdaki listeyi **bir kez** elle uygulayın:
 
-- [ ] `KaizenOneri.xlsm`'i ağ yolundan çift tıklayarak açın (kendi
+- [ ] `ProjeOneri.xlsm`'i ağ yolundan çift tıklayarak açın (kendi
       bilgisayarınıza kopyalamadan).
 - [ ] Güvenlik uyarısı çıkarsa *İçeriği Etkinleştir*'e basın; çıkmıyorsa
       Güvenilir Konum tanımı çalışıyor demektir.
 - [ ] *Sisteme Gir* → şifre → form açılıyor mu?
 - [ ] Alanları boş bırakıp *Öneriyi Gönder* → uyarı geliyor mu?
 - [ ] Formu doldurup gönderin → öneri numarası görünüyor, form temizleniyor,
-      `yonetim\oneriler\<yıl>\` altında dosya oluşuyor mu? (Kontrolü Kaizen
+      `yonetim\oneriler\<yıl>\` altında dosya oluşuyor mu? (Kontrolü Değerlendirme
       ekibi hesabıyla yapın; personel hesabı klasörü göremez — istenen budur.)
 - [ ] Personel hesabıyla `yonetim\` klasörünü açmayı deneyin → **erişim
       engellenmeli.**
 - [ ] **İkinci bir kullanıcıyla aynı anda açın** ve ikisi de gönderim yapsın →
       iki ayrı dosya oluşuyor, ikisi de “kullanımda” uyarısı almıyor mu?
-- [ ] `yonetim\KaizenYonetim.xlsm`'i açın → *Konsola Gir* → *Önerileri Yenile*
-      → gönderimler listede mi?
+- [ ] `yonetim\ProjeYonetim.xlsm`'i açın → *Sisteme Gir* → önce **Pano**
+      açılıyor, göstergeler ve grafikler doluyor mu?
+- [ ] *Liste* → *Önerileri Yenile* → gönderimler listede mi?
 - [ ] Bir satıra çift tıklayın → değerlendirme ekranı doluyor mu?
-- [ ] Durum, etki, efor girip *Değerlendirmeyi Kaydet* → geçmişe ekleniyor,
-      konsolda durum değişiyor mu?
-- [ ] *Pano* → göstergeler ve grafikler doluyor mu?
-- [ ] *Rapor* → *Parolalı Rapor Üret* → parola sorup dosya üretiyor mu?
-      Üretilen dosya parolasız açılmıyor mu?
+- [ ] Durum ve karar notu girip *Değerlendirmeyi Kaydet* → geçmişe ekleniyor,
+      listede durum değişiyor mu?
 
 Bu liste tamamlanmadan kurulum “bitti” sayılmaz.
 

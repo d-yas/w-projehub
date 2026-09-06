@@ -14,7 +14,7 @@ Option Explicit
 '    2) degerlendirme\ altindaki olay dosyalari ad sirasiyla (= zaman
 '       sirasiyla) uzerlerine oynatilir. Her olay yalnizca DOLDURDUGU alanlari
 '       gunceller; boylece sadece durum degistiren bir olay, daha once
-'       verilmis etki/efor puanlarini silmez.
+'       yazilmis karar notunu silmez.
 ' ============================================================================
 
 ' --- Gizli "Veri" sayfasinin sutun duzeni --------------------------------
@@ -27,40 +27,38 @@ Public Const V_BASLIK As Long = 6
 Public Const V_COZUM As Long = 7
 Public Const V_FAYDA As Long = 8
 Public Const V_DURUM As Long = 9
-Public Const V_ETKI As Long = 10
-Public Const V_EFOR As Long = 11
-Public Const V_ONCELIK As Long = 12
-Public Const V_SAAT As Long = 13
-Public Const V_TL As Long = 14
-Public Const V_ILK_OLAY As Long = 15
-Public Const V_SON_OLAY As Long = 16
-Public Const V_DEGERLENDIREN As Long = 17
-Public Const V_KARAR_NOTU As Long = 18
-Public Const V_OLAY_SAYISI As Long = 19
-Public Const V_GONDEREN_KULLANICI As Long = 20
-Public Const V_DOSYA As Long = 21
-Public Const V_SUTUN_SAYISI As Long = 21
+Public Const V_ILK_OLAY As Long = 10
+Public Const V_SON_OLAY As Long = 11
+Public Const V_DEGERLENDIREN As Long = 12
+Public Const V_KARAR_NOTU As Long = 13
+Public Const V_OLAY_SAYISI As Long = 14
+Public Const V_GONDEREN_KULLANICI As Long = 15
+Public Const V_DOSYA As Long = 16
+Public Const V_SUTUN_SAYISI As Long = 16
 
-' --- Konsol tablosu ------------------------------------------------------
-Public Const KONSOL_ILK_SATIR As Long = 9
-Public Const KONSOL_ILK_SUTUN As Long = 2      ' B
-Public Const KONSOL_SON_SUTUN As Long = 11     ' K
-Public Const KONSOL_AZAMI_SATIR As Long = 2000
+' --- Liste tablosu -------------------------------------------------------
+Public Const LISTE_ILK_SATIR As Long = 9
+Public Const LISTE_ILK_SUTUN As Long = 2      ' B
+Public Const LISTE_SON_SUTUN As Long = 6      ' F
+Public Const LISTE_AZAMI_SATIR As Long = 2000
 
 
 ' ###########################################################################
 '  DUGME EYLEMLERI
 ' ###########################################################################
 
-' "Konsola Gir" dugmesi -- Giris sayfasi
-Public Sub KonsolaGir()
-    If Not modUI.SifreDogrula(modAyar.SIFRE_YONETIM, "Kaizen Yönetim Konsolu") Then Exit Sub
-    modUI.OturumAc Array(modUI.SAYFA_KONSOL, modUI.SAYFA_DEGERLENDIRME, _
-                         modUI.SAYFA_PANO, modUI.SAYFA_RAPOR), modUI.SAYFA_KONSOL
+' "Sisteme Gir" dugmesi -- Giris sayfasi
+'
+' Oturum PANO ile acilir: ekip once genel resmi gorur, ayrintiya listeden
+' iner. Liste bir dugme uzaktadir.
+Public Sub SistemeGir()
+    If Not modUI.SifreDogrula(modAyar.SIFRE_YONETIM, "Proje Öneri Yönetimi") Then Exit Sub
+    modUI.OturumAc Array(modUI.SAYFA_PANO, modUI.SAYFA_LISTE, _
+                         modUI.SAYFA_DEGERLENDIRME), modUI.SAYFA_PANO
     OnerileriYenile
 End Sub
 
-' "Çıkış" dugmesi -- konsol
+' "Çıkış" dugmesi
 Public Sub Cikis()
     modUI.OturumKapat
 End Sub
@@ -73,7 +71,7 @@ Public Sub OnerileriYenile()
     modUI.HizliModAc
 
     adet = VeriyiKur()
-    KonsoluCiz
+    ListeyiCiz
     modPano.PanoyuYenile
 
     modUI.HizliModKapa
@@ -89,12 +87,12 @@ Hata:
                "Yenileme hatası"
 End Sub
 
-' Konsolun ustundeki tek satirlik ozet: kac oneri var, kaci bekliyor, ne zaman
+' Listenin ustundeki tek satirlik ozet: kac oneri var, kaci bekliyor, ne zaman
 ' yenilendi. Public'tir; testler tek basina calistirabilsin diye.
 Public Sub OzetYaz(ByVal adet As Long)
     Dim ws As Object, bekleyen As Long, i As Long, veri As Variant
 
-    Set ws = KonsolSayfasi()
+    Set ws = ListeSayfasi()
     veri = VeriDizisi()
     If IsEmpty(veri) Then
         bekleyen = 0
@@ -105,7 +103,7 @@ Public Sub OzetYaz(ByVal adet As Long)
     End If
 
     modUI.KorumaKapa ws
-    ws.Range("knsl_ozet").Value = _
+    ws.Range("liste_ozet").Value = _
         adet & " öneri okundu   ·   " & bekleyen & " tanesi değerlendirme bekliyor" & _
         "   ·   son yenileme " & Format$(Now, "dd.mm.yyyy hh:nn")
     modUI.KorumaAc ws
@@ -129,7 +127,7 @@ Public Function VeriyiKur() As Long
                                             modAyar.UZANTI_KAYIT)
 
     modUI.KorumaKapa ws
-    ws.Range(ws.Cells(2, 1), ws.Cells(KONSOL_AZAMI_SATIR + 200, V_SUTUN_SAYISI)).ClearContents
+    ws.Range(ws.Cells(2, 1), ws.Cells(LISTE_AZAMI_SATIR + 200, V_SUTUN_SAYISI)).ClearContents
 
     n = gelenler.Count
     If n = 0 Then
@@ -166,11 +164,6 @@ Public Function VeriyiKur() As Long
             veri(i, V_COZUM) = modDosyaIO.Al(kayit, "cozum_onerisi")
             veri(i, V_FAYDA) = modDosyaIO.Al(kayit, "beklenen_fayda")
             veri(i, V_DURUM) = modModel.DURUM_YENI     ' durum yalnizca olaylardan gelir
-            veri(i, V_ETKI) = 0
-            veri(i, V_EFOR) = 0
-            veri(i, V_ONCELIK) = ""
-            veri(i, V_SAAT) = 0
-            veri(i, V_TL) = 0
             veri(i, V_ILK_OLAY) = ""
             veri(i, V_SON_OLAY) = ""
             veri(i, V_DEGERLENDIREN) = ""
@@ -196,12 +189,6 @@ SonrakiGelen:
         End If
     Next yol
 
-    ' --- Oncelik sinifi ---------------------------------------------------
-    For i = 1 To n
-        veri(i, V_ONCELIK) = modModel.OncelikSinifi(CLng(veri(i, V_ETKI)), _
-                                                    CLng(veri(i, V_EFOR)))
-    Next i
-
     If n > 0 Then
         ws.Cells(2, 1).Resize(n, V_SUTUN_SAYISI).Value = veri
     End If
@@ -213,7 +200,7 @@ End Function
 
 
 ' Bir olayi kayda uygular. Yalnizca DOLU alanlar yazilir: kismi bir olay
-' (ornegin sadece durum degisikligi) onceki puanlari silmemelidir.
+' (ornegin yalnizca durum degisikligi) onceki karar notunu silmemelidir.
 Private Sub OlayiUygula(ByRef veri() As Variant, ByVal i As Long, ByVal kayit As Object)
     Dim s As String
 
@@ -221,18 +208,6 @@ Private Sub OlayiUygula(ByRef veri() As Variant, ByVal i As Long, ByVal kayit As
     If Len(s) > 0 Then
         If modModel.DurumGecerliMi(s) Then veri(i, V_DURUM) = s
     End If
-
-    s = modDosyaIO.Al(kayit, "etki_puani")
-    If IsNumeric(s) Then veri(i, V_ETKI) = CLng(Val(s))
-
-    s = modDosyaIO.Al(kayit, "efor_puani")
-    If IsNumeric(s) Then veri(i, V_EFOR) = CLng(Val(s))
-
-    s = modDosyaIO.Al(kayit, "yillik_saat_kazanimi")
-    If IsNumeric(s) Then veri(i, V_SAAT) = CDbl(Val(s))
-
-    s = modDosyaIO.Al(kayit, "yillik_tl_tasarrufu")
-    If IsNumeric(s) Then veri(i, V_TL) = CDbl(Val(s))
 
     s = modDosyaIO.Al(kayit, "karar_notu")
     If Len(s) > 0 Then veri(i, V_KARAR_NOTU) = s
@@ -251,21 +226,21 @@ End Sub
 
 
 ' ###########################################################################
-'  2. "Veri" SAYFASINDAN KONSOLA
+'  2. "Veri" SAYFASINDAN LISTEYE
 ' ###########################################################################
 
-Public Sub KonsoluCiz()
+Public Sub ListeyiCiz()
     Dim ws As Object, veri As Variant
     Dim sira() As Long
     Dim n As Long, i As Long, r As Long
     Dim tablo() As Variant
 
-    Set ws = KonsolSayfasi()
+    Set ws = ListeSayfasi()
     modUI.KorumaKapa ws
 
     ' Onceki icerigi temizle (bicimler sayfada kalir, yalnizca deger silinir).
-    ws.Range(ws.Cells(KONSOL_ILK_SATIR, KONSOL_ILK_SUTUN), _
-             ws.Cells(KONSOL_AZAMI_SATIR, KONSOL_SON_SUTUN)).ClearContents
+    ws.Range(ws.Cells(LISTE_ILK_SATIR, LISTE_ILK_SUTUN), _
+             ws.Cells(LISTE_AZAMI_SATIR, LISTE_SON_SUTUN)).ClearContents
     FiltreyiKaldir ws
 
     veri = VeriDizisi()
@@ -277,7 +252,7 @@ Public Sub KonsoluCiz()
     n = UBound(veri, 1)
     sira = SiralamaDizisi(veri, n)
 
-    ReDim tablo(1 To n, 1 To KONSOL_SON_SUTUN - KONSOL_ILK_SUTUN + 1)
+    ReDim tablo(1 To n, 1 To LISTE_SON_SUTUN - LISTE_ILK_SUTUN + 1)
     For r = 1 To n
         i = sira(r)
         tablo(r, 1) = veri(i, V_ONERI_NO)
@@ -285,33 +260,12 @@ Public Sub KonsoluCiz()
         tablo(r, 3) = veri(i, V_AD_SOYAD)
         tablo(r, 4) = veri(i, V_BASLIK)
         tablo(r, 5) = veri(i, V_DURUM)
-        tablo(r, 6) = BosSifir(veri(i, V_ETKI))
-        tablo(r, 7) = BosSifir(veri(i, V_EFOR))
-        tablo(r, 8) = veri(i, V_ONCELIK)
-        tablo(r, 9) = BosSifir(veri(i, V_SAAT))
-        tablo(r, 10) = BosSifir(veri(i, V_TL))
     Next r
 
-    ws.Cells(KONSOL_ILK_SATIR, KONSOL_ILK_SUTUN).Resize(n, UBound(tablo, 2)).Value = tablo
+    ws.Cells(LISTE_ILK_SATIR, LISTE_ILK_SUTUN).Resize(n, UBound(tablo, 2)).Value = tablo
     FiltreKur ws, n
     modUI.KorumaAc ws
 End Sub
-
-' Sifir yerine bos gostermek tabloyu okunakli tutar: puanlanmamis bir oneri
-' "0 etki" degil, "henüz puanlanmamis" demektir.
-Public Function BosDegilse(ByVal v As Variant) As Variant
-    If Not IsNumeric(v) Then
-        BosDegilse = ""
-    ElseIf Val(v) = 0 Then
-        BosDegilse = ""
-    Else
-        BosDegilse = v
-    End If
-End Function
-
-Private Function BosSifir(ByVal v As Variant) As Variant
-    BosSifir = BosDegilse(v)
-End Function
 
 Private Function TarihGoster(ByVal isoTarih As String) As String
     ' "2026-09-04T10:11:51" -> "04.09.2026"
@@ -324,7 +278,7 @@ Private Function TarihGoster(ByVal isoTarih As String) As String
 End Function
 
 ' Varsayilan sira: once bekleyenler (PDCA akisindaki sirayla), her grup
-' kendi icinde eskiden yeniye. Kaizen ekibi ekrani actiginda sirada ne
+' kendi icinde eskiden yeniye. Değerlendirme ekibi ekrani actiginda sirada ne
 ' oldugunu ustte gorur.
 Private Function SiralamaDizisi(ByVal veri As Variant, ByVal n As Long) As Long()
     Dim sira() As Long, anahtar() As String
@@ -365,8 +319,8 @@ End Sub
 Private Sub FiltreKur(ByVal ws As Object, ByVal n As Long)
     On Error Resume Next
     If n > 0 Then
-        ws.Range(ws.Cells(KONSOL_ILK_SATIR - 1, KONSOL_ILK_SUTUN), _
-                 ws.Cells(KONSOL_ILK_SATIR - 1 + n, KONSOL_SON_SUTUN)).AutoFilter
+        ws.Range(ws.Cells(LISTE_ILK_SATIR - 1, LISTE_ILK_SUTUN), _
+                 ws.Cells(LISTE_ILK_SATIR - 1 + n, LISTE_SON_SUTUN)).AutoFilter
     End If
     On Error GoTo 0
 End Sub
@@ -380,20 +334,20 @@ Public Function VeriSayfasi() As Object
     Set VeriSayfasi = ThisWorkbook.Worksheets(modUI.SAYFA_VERI)
 End Function
 
-Public Function KonsolSayfasi() As Object
-    Set KonsolSayfasi = ThisWorkbook.Worksheets(modUI.SAYFA_KONSOL)
+Public Function ListeSayfasi() As Object
+    Set ListeSayfasi = ThisWorkbook.Worksheets(modUI.SAYFA_LISTE)
 End Function
 
-' Konsolda uzerine tiklanan satirin oneri numarasi. Tablo disinda bir yer
+' Listede uzerine tiklanan satirin oneri numarasi. Tablo disinda bir yer
 ' seciliyse bos doner.
 Public Function SeciliOneriNo() As String
     Dim ws As Object, satir As Long, deger As String
 
-    Set ws = KonsolSayfasi()
+    Set ws = ListeSayfasi()
     satir = ActiveCell.Row
-    If satir < KONSOL_ILK_SATIR Or satir > KONSOL_AZAMI_SATIR Then Exit Function
+    If satir < LISTE_ILK_SATIR Or satir > LISTE_AZAMI_SATIR Then Exit Function
 
-    deger = Trim$(CStr(ws.Cells(satir, KONSOL_ILK_SUTUN).Value & ""))
+    deger = Trim$(CStr(ws.Cells(satir, LISTE_ILK_SUTUN).Value & ""))
     If Len(deger) = 0 Then Exit Function
     SeciliOneriNo = deger
 End Function

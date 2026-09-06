@@ -1,7 +1,7 @@
 Option Explicit
 
 ' ============================================================================
-'  KaizenYonetim.xlsm -- ThisWorkbook
+'  ProjeYonetim.xlsm -- ThisWorkbook
 '
 '  Kitap her acildiginda kapali konuma doner: yalnizca Giris ekrani gorunur.
 '  Sayfa korumasi UserInterfaceOnly:=True ile yeniden kurulur; bu bayrak
@@ -28,7 +28,7 @@ Public Function DerlemeSinamasi() As String
 End Function
 
 
-' Konsolda bir satira cift tiklamak o oneriyi degerlendirme ekraninda acar.
+' Listede bir satira cift tiklamak o oneriyi degerlendirme ekraninda acar.
 ' Dugmeye gitmeden calisan bu kisayol, gunluk kullanimda en cok tekrarlanan
 ' islemi tek harekete indirir.
 ' NOT: Cancel ByRef olmak ZORUNDADIR (varsayilan). ByVal yazilirsa imza olayin
@@ -38,28 +38,13 @@ Private Sub Workbook_SheetBeforeDoubleClick(ByVal Sh As Object, ByVal Target As 
                                             Cancel As Boolean)
     Dim no As String
 
-    If StrComp(Sh.Name, modUI.SAYFA_KONSOL, vbTextCompare) <> 0 Then Exit Sub
-    If Target.Row < modKonsolide.KONSOL_ILK_SATIR Then Exit Sub
+    If StrComp(Sh.Name, modUI.SAYFA_LISTE, vbTextCompare) <> 0 Then Exit Sub
+    If Target.Row < modKonsolide.LISTE_ILK_SATIR Then Exit Sub
 
-    no = Trim$(CStr(Sh.Cells(Target.Row, modKonsolide.KONSOL_ILK_SUTUN).Value & ""))
+    no = Trim$(CStr(Sh.Cells(Target.Row, modKonsolide.LISTE_ILK_SUTUN).Value & ""))
     If Len(no) = 0 Then Exit Sub
 
     Cancel = True
     modDegerlendirme.OneriyiAc no
 End Sub
 
-
-' Etki ya da efor degistiginde oncelik sinifi aninda guncellenir; ekip
-' puanlamanin sonucunu kaydetmeden gorur.
-Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)
-    If StrComp(Sh.Name, modUI.SAYFA_DEGERLENDIRME, vbTextCompare) <> 0 Then Exit Sub
-
-    On Error Resume Next
-    If Not Application.Intersect(Target, Sh.Range("dg_etki")) Is Nothing _
-       Or Not Application.Intersect(Target, Sh.Range("dg_efor")) Is Nothing Then
-        Application.EnableEvents = False
-        modDegerlendirme.OncelikGoster Sh        ' korumasini kendi yonetir
-        Application.EnableEvents = True
-    End If
-    On Error GoTo 0
-End Sub

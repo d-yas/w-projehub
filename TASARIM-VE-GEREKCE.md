@@ -1,4 +1,4 @@
-# Kaizen Öneri Sistemi — Sürüm 2 (Ortak Klasör)
+# Proje Öneri Sistemi — Sürüm 2 (Ortak Klasör)
 ## Tasarım, gerekçe ve kısıtlar
 
 Bu belge Sürüm 2'nin **neden böyle tasarlandığını** anlatır. Nasıl kurulacağı
@@ -10,7 +10,7 @@ Bu belge Sürüm 2'nin **neden böyle tasarlandığını** anlatır. Nasıl kuru
 
 |  |  |
 |---|---|
-| **Amaç** | Personelin Kaizen (sürekli iyileştirme) önerisi göndermesi, Kaizen ekibinin bunları PDCA döngüsüyle takip edip yönetime raporlaması |
+| **Amaç** | Personelin iyileştirme önerisi göndermesi, Değerlendirme ekibinin bunları PDCA döngüsüyle takip etmesi |
 | **Yaklaşım** | Sunucu yok. Her şey bir ağ paylaşımındaki Excel dosyaları ve klasörlerle yürür |
 | **Kullanıcıda kurulum** | Yok. Herkeste zaten olan Excel yeterli |
 | **Tek gerçek gereksinim** | Makroların çalışmasına izin verilmesi |
@@ -28,10 +28,9 @@ iki sürüm birbirinden bağımsızdır, hangisi uygunsa o seçilir.
 
 1. Personel öneri gönderirken hiçbir şey kurmasın, hiçbir yere kaydolmasın
 2. İki kişi aynı anda gönderim yaptığında hiçbir öneri kaybolmasın
-3. Kaizen ekibi önerileri tek ekrandan görsün, değerlendirsin, önceliklendirsin
+3. Değerlendirme ekibi önerileri tek ekrandan görsün, değerlendirsin, önceliklendirsin
 4. "Kim, ne zaman, neyi değiştirdi" izi kaybolmasın — bankacılıkta aranan izlenebilirlik
-5. Yönetime giden rapor parolasız açılamasın
-6. Sistem bozulsa bile veri kaybolmasın
+5. Sistem bozulsa bile veri kaybolmasın
 
 ---
 
@@ -71,8 +70,7 @@ ortamda güvenilir değildir.
 Şifreler kodun içinde durur. VBA proje parolaları ücretsiz araçlarla kırılabilir.
 
 > **Sonuç:** Şifreler yalnızca "yanlış ekrana yanlışlıkla girmeyi" engeller.
-> Asıl erişim denetimi **ağ klasörünün NTFS izinleridir**. Tek istisna yönetim
-> raporudur: o Excel'in kendi AES şifrelemesiyle korunur ve gerçekten güvenlidir.
+> Asıl erişim denetimi **ağ klasörünün NTFS izinleridir**.
 
 ---
 
@@ -80,14 +78,14 @@ ortamda güvenilir değildir.
 
 ```
                  PERSONEL                              KAİZEN EKİBİ
-            KaizenOneri.xlsm                      yonetim\KaizenYonetim.xlsm
+            ProjeOneri.xlsm                      yonetim\ProjeYonetim.xlsm
                     │                                        │
          şifre → form → Gönder                      şifre → Önerileri Yenile
                     │                                        │
                     ▼                                        │
         ┌─────────────────────────┐                          │
         │ yonetim\oneriler\<yıl>\ │ ───────── okur ─────────►│
-        │  ON-260904-A7K.txt      │                          │
+        │  PRJ-26A7K.txt          │                          │
         │  BIRAKMA KUTUSU:        │                          ▼
         │  yaz evet, oku hayır    │                 değerlendirme yapılır
         └─────────────────────────┘
@@ -98,17 +96,14 @@ ortamda güvenilir değildir.
                                             │   her değişiklik = yeni│
                                             │   dosya (ekle-only)    │
                                             └────────────────────────┘
-                                                             │
-                                                             ▼
-                                                   rapor\ → parolalı .xlsx
 ```
 
 **`yonetim\oneriler\` bir bırakma kutusudur.** Personel oraya yazabilir ama
 içini göremez: listeleyemez, kimsenin önerisini okuyamaz, hiçbir dosyayı
 silemez (NTFS izinleri; `KURULUM.md` madde 3). Klasör `yonetim\` içindedir;
 personele o klasör üzerinde yalnızca *geçiş* hakkı verilir, listeleme hakkı
-verilmez. Böylece `kaizen\` altında görünen tek şey çalışma kitabı ve
-`yonetim\` adıdır; değerlendirme notlarına ve raporlara erişim yoktur.
+verilmez. Böylece `projeoneri\` altında görünen tek şey çalışma kitabı ve
+`yonetim\` adıdır; değerlendirme notlarına erişim yoktur.
 
 **Ayrı bir "gelen kutusu" yoktur.** Ara bir tasarımda öneriler önce
 `gelen\` klasörüne bırakılıp okunduktan sonra arşive taşınıyordu. Taşımanın
@@ -137,7 +132,7 @@ yerindedir, sonradan hiçbir yere taşınmaz.
 
 ```
 sema=3
-oneri_no=ON-260904-A7K
+oneri_no=PRJ-26A7K
 tarih=2026-09-04T10:11:51
 ad_soyad=...
 sicil_no=...
@@ -164,8 +159,8 @@ dosyada tam olarak bir satır kaplar ve ayrıştırma basit kalır.
 yerleşik `Open/Print` komutu dosyayı ANSI yazar; Türkçe karakterler farklı kod
 sayfasına sahip bir makinede bozulurdu.
 
-**Öneri numarası** `ON-YYMMDD-XXX` biçimindedir; örnek: `ON-260904-A7K`.
-On üç karakterdir — telefonda söylenebilsin, elle yazılabilsin, bir kenara not
+**Öneri numarası** `PRJ-YYXXX` biçimindedir; örnek: `PRJ-26A7K`.
+Dokuz karakterdir — telefonda söylenebilsin, elle yazılabilsin, bir kenara not
 edilebilsin diye. Rastgele ekin alfabesinden `0/O` ve `1/I` çıkarılmıştır.
 
 Sıralı numara (`000001`) kullanılamaz — sıralı sayaç ortak bir dosya
@@ -180,7 +175,7 @@ kullanılabilir. Dosya adı öneri numarasının kendisidir.
 (`<oneri_no>_<YYYYMMDDHHMMSSss>_<rastgele>.txt`). Olayların sırası
 adlarından okunduğu için saniye çözünürlüğü yetmezdi: aynı saniyede yazılan
 iki olayın sırasını rastgele ek belirler ve durum yanlış türetilebilirdi.
-(Gönderim numarası artık zaman sıralı değildir; konsol sıralaması dosya adına
+(Gönderim numarası artık zaman sıralı değildir; liste sıralaması dosya adına
 değil kayıttaki `tarih` alanına bakar.)
 
 **Yıl alt klasörleri** (`oneriler\2026\`) ilk günden kullanılır; klasör başına
@@ -192,7 +187,7 @@ veya yeniden kurulsa veri kaybolmaz.
 
 ---
 
-## 5. Kaizen modeli
+## 5. Değerlendirme modeli
 
 Sistem yalnızca bir form değil; bir iyileştirme yöntemi uygular.
 
@@ -201,7 +196,7 @@ Sistem yalnızca bir form değil; bir iyileştirme yöntemi uygular.
 | Durum | PDCA | Anlamı |
 |---|---|---|
 | Yeni | — | Henüz incelenmedi |
-| Değerlendirmede | Planla | Kaizen ekibi inceliyor |
+| Değerlendirmede | Planla | Değerlendirme ekibi inceliyor |
 | Planlandı | Planla | Kabul edildi, uygulama planlanıyor |
 | Pilot Uygulamada | Uygula | Sınırlı alanda deneniyor |
 | Ölçümleniyor | Kontrol | Pilot sonuçları ölçülüyor |
@@ -212,39 +207,104 @@ Sistem yalnızca bir form değil; bir iyileştirme yöntemi uygular.
 birimi ve israf (muda) türü. İkisi de kaldırıldı. Birim, sicil numarasından
 zaten çıkarılabilecek bir bilgiydi; israf türü ise gönderen personelden
 sınıflandırma yapmasını istiyordu ve bu, formu doldurmayı gereksiz
-zorlaştırıyordu. Öneri modelinin ağırlığı PDCA durum akışı ve etki/efor
-önceliklendirmesinde kaldı.
+zorlaştırıyordu. Öneri modelinin ağırlığı PDCA durum akışında kaldı.
 
-**Öncelik matrisi** — etki ve efor 1–5 arası puanlanır (3+ yüksek etki, 2− düşük efor):
+**Puanlama ve tasarruf ölçümü de kaldırıldı.** Bir sürüm boyunca etki/efor
+puanı (1–5), bundan türeyen dört kutuluk öncelik matrisi ve yıllık saat / TL
+tasarruf alanları vardı. Üçü de değerlendiren kişiden, elinde ölçüm olmadan
+sayı üretmesini istiyordu; girilmeyince pano boş, girilince güvenilmez
+oluyordu. Değerlendirme artık iki alandır: **yeni durum** ve **karar notu /
+yorum**. Öncelik, durum akışının kendisinden okunur.
 
-| | Düşük efor | Yüksek efor |
-|---|---|---|
-| **Yüksek etki** | Hızlı Kazanım — önce bunlar | Büyük Proje — planlama ve kaynak gerektirir |
-| **Düşük etki** | Doldurma İşi — boş kapasiteyle | Değerlendirme Dışı — bu haliyle önerilmez |
+**Göstergeler** panoda otomatik hesaplanır: toplam öneri, değerlendirme
+bekleyen, uygulamaya geçmiş ve bu ay gelen sayıları; ayrıca durum dağılımı ve
+son 12 ayın gönderim trendi grafikleri. Hepsi durumdan türer — elle girilen
+hiçbir rakama dayanmaz.
 
-**Göstergeler** panoda otomatik hesaplanır: bekleyen öneri sayısı, uygulamaya
-geçmiş öneri sayısı, yıllık kazanılan saat, yıllık TL tasarruf, hızlı kazanım
-sayısı, kabul oranı, ortalama ilk yanıt süresi, durum dağılımı ve son 12 ayın
-gönderim trendi. Tasarruf yalnızca fayda gerçekleşmiş sayılan durumlarda
-(Pilot Uygulamada, Ölçümleniyor, Standartlaştırıldı) toplanır — henüz
-uygulanmamış öneri tasarruf olarak sayılmaz.
+**Pano açılış ekranıdır.** Yönetim kitabında şifre girildiğinde ilk gelen ekran
+Pano'dur; kitaptaki ilk sayfa da odur. Gerekçe: ekibin günlük ilk sorusu "ne
+durumdayız"dır, "hangi öneri" değil. Ayrıntıya inmek bir düğme uzaktadır.
+Öneri tablosunun adı **Liste**'dir (bir sürüm boyunca "Konsol" idi); ekranın
+yaptığı iş tam olarak budur ve ekip de onu böyle adlandırıyordu.
+
+**Rapor ekranı kaldırıldı.** Bir sürüm boyunca ayrı bir ekran, dönem süzgeciyle
+`yonetim\rapor\` altına düz bir `.xlsx` üretiyordu (daha öncesinde bu dosya AES
+parolalıydı; parola üretim sırasında sorulup hiçbir yere kaydedilmiyordu ve
+kaybolduğunda rapor kurtarılamıyordu — o da kaldırılmıştı). Panonun göstergeleri
+ve listenin süzülebilir tablosu aynı soruları anında yanıtladığı için ekran
+kullanılmadı; ayrı bir dosya üretmek, onu ayrı bir klasörde izinlerle korumak ve
+klasörün dışına çıktığı anda korumasız kalmasını göze almak karşılıksız bir
+maliyetti. **Bedeli açıktır:** dönem süzgeçli hazır bir çıktı yok; yönetime bir
+şey gidecekse liste tablosu doğrudan kopyalanır.
 
 ---
 
-## 6. Teknik yapı
+## 6. Görsel dil
+
+Ekranlar bir hesap tablosu gibi değil, bir uygulama gibi okunmalı. Bunu dört
+karar sağlıyor.
+
+**Zemin açık, içerik beyaz.** Sayfa tek renk (`F5F7FA`) boyanır; okunacak her
+şey — kart, tablo gövdesi, giriş alanı — beyaz bir yüzeye oturur. Katman farkı,
+kutu çizmeden hiyerarşi kurar. Marka laciverti (`002D62`) değişmedi ama artık
+yalnızca üç yerde kullanılıyor: başlık bandı, birincil düğme ve KPI rakamı.
+Tablo başlıkları dolu lacivert bir banttan açık zemine geçti; koyu bant,
+tablonun kendisinden daha çok dikkat çekiyordu. Çizgiler üç basamağa ayrıldı:
+`CIZGI_INCE` (tablo satırları), `CIZGI_GRI` (kart kenarı), `ALAN_CIZGI` (giriş
+alanı). Tablolardan dikey çizgiler tamamen kaldırıldı — "hücre ızgarası"
+hissini en çok üreten şey onlardı.
+
+**Yazılabilir olan beyazdır.** Değerlendirme ekranında salt okunur alanların
+kutusu yoktur; zeminde dururlar ve altlarında ince bir çizgi vardır. Beyaz
+yüzey yalnızca yazılabilir alanlara ayrılmıştır. "Buraya yazamazsın" bilgisi
+bir kilit uyarısıyla değil, görünümle verilir.
+
+**Pano'da gerçek şekiller.** Excel hücrelere yuvarlak köşe ve yumuşak gölge
+veremez; şekiller verebilir. Bedeli şudur: **şekiller her zaman hücrelerin
+üstünde çizilir**, yani kartın metni de şekle taşınmak zorundadır. Bu yüzden
+Pano'da iki katman var. Altta hücreler: göstergelerin **tek doğruluk kaynağı**
+orasıdır, `modPano` oraya yazar ve testler oradan okur. Üstte, aynı sayıyı
+gösteren şekiller: `modPano.KartYaz` her yenilemede şeklin metnini hücredeki
+değerle eşitler. Şekil metnini hücreye *formülle* bağlamak da mümkündü ama
+denendi ve elendi: bağlı metin hücrenin sayı biçimini yok sayıp `1234` yerine
+`1234,0` yazıyor. Şekil katmanı bir Excel sürümünde kurulamazsa `try/except`
+onu atlar; gösterge yine doğru hesaplanır, yalnızca kart yüzeyi düz görünür.
+Grafiklerin arkasındaki paneller de aynı şekilde çizilir ve **grafiklerden önce**
+eklenmek zorundadır: şekiller ile grafikler aynı çizim katmanındadır ve ekleme
+sırasına göre üst üste binerler.
+
+**Excel'in kendi arayüzü olduğu gibi kalır.** Bir sürüm boyunca oturum
+açıldığında formül çubuğu, sayfa sekmeleri ve satır/sütun başlıkları
+gizleniyordu ("kiosk modu"); ekran gerçekten bir uygulamaya benziyordu ama
+günlük kullanımda engel oldu — bu ayarların bir kısmı **uygulama düzeyindedir**
+ve aynı Excel'de açık olan diğer kitapları da etkiler. Kaldırıldı. Ekranın
+uygulama gibi görünmesi artık yalnızca sayfanın kendi ayarlarına dayanıyor:
+kılavuz çizgileri kapalı, tek renk zemin, beyaz yüzeyler. Bunlar dosyanın
+içinde durur, kullanıcının Excel'ine dokunmaz.
+
+> **VBA tuzağı — pahalıya mal oldu, tekrarlanmasın.** Modül düzeyi değişkenler
+> VBA'da yalnızca *bildirim bölümünde*, yani ilk `Sub`/`Function`'dan önce
+> durabilir. Yordamların arasına konan bir `Private x As Boolean` modülü
+> **derletmez**; `python kur.py`'nin düğme doğrulaması bunu görmez, çünkü VBA
+> yordamları isteğe bağlı derler. Hata ancak o yordam ilk kez çağrıldığında
+> ortaya çıkar — görünmeyen bir Excel'de ise hiç görünmez: makro sessizce geri
+> dönmez. `test_uretim.py` artık her `.bas` dosyasında bu yerleşimi denetler.
+
+---
+
+## 7. Teknik yapı
 
 | Modül | Sorumluluk |
 |---|---|
-| `modAyar.bas` | Klasör yolları, şifre sabitleri, şema sürümü, eşikler |
-| `modTasarim.bas` | Renk ve tipografi sabitleri, durum/öncelik rozetleri |
+| `modAyar.bas` | Klasör yolları, şifre sabitleri, şema sürümü |
+| `modTasarim.bas` | Renk ve tipografi sabitleri, durum rozetleri |
 | `modDosyaIO.bas` | UTF-8 okuma/yazma, atomik yazma, klasör tarama, OneDrive yol çevirisi |
-| `modModel.bas` | Kaizen modeli: durumlar, PDCA, öncelik, tasarruf kuralı |
+| `modModel.bas` | Değerlendirme modeli: durumlar, PDCA, durum anlamları |
 | `modUI.bas` | Ekran yönetimi, şifre kapısı, koruma, mesajlar, sessiz mod |
 | `modGonderim.bas` | Personel tarafı: form doğrulama, öneri no, gönderim |
 | `modKonsolide.bas` | Klasörleri okuyup olayları tekrar oynatarak tabloyu kurma |
 | `modDegerlendirme.bas` | Değerlendirme ekranı, ekle-only olay kaydı, geçmiş |
 | `modPano.bas` | Göstergeler ve grafik kaynak verisi |
-| `modRapor.bas` | AES parolalı yönetim raporu |
 
 Sayfa ve `ThisWorkbook` kod-arkası en az düzeyde tutulur (yalnızca olay
 yönlendirme); tüm mantık modüllerde kalır ki `.bas` dosyaları tek kaynak olsun.
@@ -279,7 +339,7 @@ açar ve **işi bitince, hata alsa bile, eski haline döndürür**.
 
 ---
 
-## 7. Güvenlik — ne gerçek, ne değil
+## 8. Güvenlik — ne gerçek, ne değil
 
 | Katman | Gerçek sınır mı | Not |
 |---|---|---|
@@ -287,23 +347,20 @@ açar ve **işi bitince, hata alsa bile, eski haline döndürür**.
 | Yönetim şifresi | **Hayır** | VBA içinde düz durur |
 | Sayfa/kitap koruması | **Hayır** | Kazara bozmayı önler |
 | NTFS klasör izinleri | **Evet** | Asıl erişim denetimi budur |
-| Rapor parolası | **Evet** | Excel'in ECMA-376 AES şifrelemesi |
 
-**Rapor parolası koda gömülü değildir.** Rapor üretilirken kullanıcıya sorulur,
-iki kez doğrulanır ve hiçbir yere kaydedilmez. Bu, tablodaki tek gerçek sınırı
-gerçekten sağlam kılar: çalışma kitabını ele geçiren biri raporu açamaz.
-Bedeli, parola kaybolursa raporun kurtarılamamasıdır — raporu yeniden üretmek
-gerekir.
+Artık `yonetim\` altından dışarı bir dosya üretilmez: rapor ekranı kaldırıldığı
+için sistemin ürettiği her şey izinlerle korunan klasörlerin içinde kalır
+(gerekçesi 5. bölümde).
 
 Önerilen izin düzeni (ayrıntısı `KURULUM.md` madde 3):
 
 | Klasör | Kimler | İzin |
 |---|---|---|
-| `kaizen\` | Tüm personel | Okuma + Çalıştırma |
-| `KaizenOneri.xlsm` | Tüm personel | **Salt okunur** (yoksa ilk açan kilitler) |
+| `projeoneri\` | Tüm personel | Okuma + Çalıştırma |
+| `ProjeOneri.xlsm` | Tüm personel | **Salt okunur** (yoksa ilk açan kilitler) |
 | `yonetim\` | Tüm personel | **Yalnızca geçiş** — listeleme yok, miras yok |
 | `yonetim\oneriler\` | Tüm personel | **Yalnızca yazma** — listeleme, okuma, silme yok |
-| `yonetim\` içindeki diğer her şey | Yalnızca Kaizen ekibi | Tam denetim |
+| `yonetim\` içindeki diğer her şey | Yalnızca Değerlendirme ekibi | Tam denetim |
 
 Bırakma kutusunun **bırakma kutusu** olması kritiktir. Yalnızca silmeyi
 engellemek yetmez: listeleme ve okuma da kapatılmalıdır, aksi halde herkes
@@ -333,7 +390,7 @@ kaydedilemez. Makronun ortak klasöre yazmasını engellemez.
 
 ---
 
-## 8. Test kapsamı
+## 9. Test kapsamı
 
 `python testler\tum_testler.py` — **145'ten fazla kontrol, üç aşamada.**
 Bu bir taklit (mock) testi değildir: üretilen `.xlsm` dosyalarını gerçekten
@@ -343,15 +400,13 @@ doğrular.
 | Aşama | Neyi denetler |
 |---|---|
 | `test_uretim.py` | Excel açmadan: dosyalar üretildi mi, VBA projesi var mı, sayfa düzeni ve adlandırılmış aralıklar yerinde mi, **tekrarlanan bilgi ayrışmış mı** |
-| `test_uctan_uca.py` | Gerçek Excel'de: gönderim, konsolidasyon, durum türetme, ekle-only geçmiş, tasarruf kuralı, parolalı rapor, form ve değerlendirme ekranlarının **gerçek düğme yolları** |
+| `test_uctan_uca.py` | Gerçek Excel'de: gönderim, konsolidasyon, durum türetme, ekle-only geçmiş, göstergeler, form ve değerlendirme ekranlarının **gerçek düğme yolları** |
 | `test_eszamanlilik.py` | Aynı saniyede 30 gönderim; 3 ayrı süreç ve 3 ayrı Excel örneğiyle paralel gönderim |
 | `test_izinler.py` | `yonetim\` ve `yonetim\oneriler\` klasörlerini **gerçek NTFS izinleriyle** kilitler; gönderimin çalıştığını, buna karşılık listeleme/okuma/silmenin engellendiğini doğrular |
 
 Özellikle korunan davranışlar: ikinci değerlendirme ilkinin üzerine yazmaz;
-yalnızca durum değiştiren kısmi bir olay önceki puanları silmez; tasarruf
-toplamına yalnızca uygulamaya geçmiş öneriler girer; şifreli rapor parolasız
-açılmaz; yarım yazılmış (`.tmp`) dosya okunmaz; grafikler hiçbir kategoriyi
-düşürmez.
+yalnızca durum değiştiren kısmi bir olay önceki karar notunu silmez; yarım
+yazılmış dosya okunmaz; grafikler hiçbir kategoriyi düşürmez.
 
 **Testin göremediği — bilinçli sınır:** Testler makroları COM üzerinden çağırır.
 Bu yol Excel'in makro güvenlik ayarını, "İçeriği Etkinleştir" uyarısını ve
@@ -375,7 +430,7 @@ yerleşim böyle denetlenir.
 
 ---
 
-## 9. Bilinen kısıtlar, riskler ve açık maddeler
+## 10. Bilinen kısıtlar, riskler ve açık maddeler
 
 **1. Makro izni — sistemi tümden engelleyebilir**
 Banka BT'si makroları grup ilkesiyle kapattıysa bu sürüm hiç açılmaz. Kuruma
@@ -393,7 +448,7 @@ Eşlenmiş klasörlerde Excel dosyanın konumunu disk yolu olarak değil
 davranmayabilir. **Öneri: çıktıları OneDrive altındaki bir klasörden
 çalıştırmayın.** Testler bu belirsizliği dışarıda bırakmak için `%TEMP%`
 altında — OneDrive dışında — kendi geçici paylaşımını kurar. Gerçek kurulum bir
-UNC ağ paylaşımında olacağı için (`\\sunucu\paylasim\kaizen`) durum üretimde
+UNC ağ paylaşımında olacağı için (`\\sunucu\paylasim\projeoneri`) durum üretimde
 oluşmaz.
 
 **3. Kişi bazlı yetki yok**
@@ -407,7 +462,7 @@ birkaç bin dosyaya kadar sorunsuzdur; on binlere çıkılırsa eski yıl
 klasörlerini arşive taşımak yeterlidir.
 
 **5. Anlık bildirim yok**
-Yeni öneri geldiğinde kimseye haber gitmez. Kaizen ekibi kitabı açıp
+Yeni öneri geldiğinde kimseye haber gitmez. Değerlendirme ekibi kitabı açıp
 *Önerileri Yenile* demelidir.
 
 **6. Excel sürümü**
@@ -429,14 +484,14 @@ işlevi taşır ve testler bunu çağırarak modülü derlenmeye zorlar.
 
 ---
 
-## 10. Sürüm 1 ile karşılaştırma
+## 11. Sürüm 1 ile karşılaştırma
 
 | | Sürüm 1 (Flask sunucu) | Sürüm 2 (ortak klasör) |
 |---|---|---|
 | Sürekli açık bilgisayar | gerekli | gerekmez |
 | Kullanıcıda kurulum | yok (tarayıcı) | yok (Excel) |
 | Makro izni | gerekmez | **gerekir** |
-| Takip numarası | sıralı `PRJ-2026-000001` | tarih + rastgele `ON-260904-A7K` |
+| Takip numarası | sıralı `PRJ-2026-000001` | yıl + rastgele `PRJ-26A7K` |
 | Eşzamanlı yazma | sunucu sıraya sokar | yapısal olarak imkânsız |
 | Anlık bildirim | mümkün | yok |
 | Bakım | sunucu izlenmeli | dosya klasörü yedeklenmeli |
@@ -446,7 +501,7 @@ Karar, bankanın sunucu tahsis edip edemeyeceğine ve makro politikasına bağl�
 
 ---
 
-## 11. Sürdürme
+## 12. Sürdürme
 
 | İş | Nasıl |
 |---|---|

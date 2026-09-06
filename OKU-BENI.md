@@ -1,7 +1,7 @@
 # XJ Birimi — Proje Öneri Formu
 
-Personel iyileştirme önerisi gönderir; Kaizen ekibi bunları PDCA döngüsüyle
-değerlendirir, önceliklendirir ve yönetime parolalı bir rapor üretir.
+Personel iyileştirme önerisi gönderir; Değerlendirme ekibi bunları PDCA döngüsüyle
+değerlendirir, önceliklendirir ve panodan izler.
 
 **Sunucu yoktur.** Her şey bir ağ paylaşımındaki iki Excel dosyası ve birkaç
 klasörle yürür. Kullanıcıda kurulum gerekmez; herkeste zaten olan Excel yeterlidir.
@@ -9,11 +9,11 @@ Tek gerçek gereksinim makroların çalışmasına izin verilmesidir.
 
 | | |
 |---|---|
-| Ekranlar | Öneri formu · Konsol · Değerlendirme · Pano · Rapor |
+| Ekranlar | Öneri formu · Pano · Liste · Değerlendirme |
 | Veri | Ortak klasörde düz metin dosyaları (UTF-8) |
-| Öneri no | `ON-260904-A7K` — kısa, telefonda söylenebilir |
+| Öneri no | `PRJ-26A7K` — kısa, telefonda söylenebilir |
 | Kurulum | Kullanıcıda yok; paylaşıma bir kez kopyalama |
-| Doğrulama | 145+ otomatik kontrol, gerçek Excel'de |
+| Doğrulama | 150+ otomatik kontrol, gerçek Excel'de |
 
 ---
 
@@ -21,14 +21,14 @@ Tek gerçek gereksinim makroların çalışmasına izin verilmesidir.
 
 ```
         PERSONEL                                    KAİZEN EKİBİ
-   KaizenOneri.xlsm                          yonetim\KaizenYonetim.xlsm
+   ProjeOneri.xlsm                          yonetim\ProjeYonetim.xlsm
           │                                              │
-   şifre → form → Gönder                    şifre → Önerileri Yenile
+   şifre → form → Gönder                    şifre → Pano → Liste
           │                                              │
           ▼                                              │
   ┌────────────────────────┐                             │
   │ yonetim\oneriler\<yıl>\│ ────────── okur ───────────►│
-  │  ON-260904-A7K.txt     │                             ▼
+  │  PRJ-26A7K.txt         │                             ▼
   │  BIRAKMA KUTUSU:       │                      değerlendirme
   │  yaz evet, oku hayır   │                             │
   └────────────────────────┘                             ▼
@@ -37,9 +37,6 @@ Tek gerçek gereksinim makroların çalışmasına izin verilmesidir.
                                         │  her değişiklik = yeni     │
                                         │  dosya (ekle-only geçmiş)  │
                                         └────────────────────────────┘
-                                                         │
-                                                         ▼
-                                            yonetim\rapor\ → AES parolalı .xlsx
 ```
 
 Üç kural sistemin belkemiğidir:
@@ -48,7 +45,7 @@ Tek gerçek gereksinim makroların çalışmasına izin verilmesidir.
    kendi dosyasını bırakır. İki kişi aynı anda gönderse bile çakışma önlenmiş
    değil, *yapısal olarak imkânsızdır*. Ayrı bir “gelen kutusu” yoktur: dosya
    baştan itibaren kalıcı yerindedir. Personel bu klasöre yazabilir ama içini
-   göremez; `kaizen\` altında gördüğü tek şey çalışma kitabı ve `yonetim\`
+   göremez; `projeoneri\` altında gördüğü tek şey çalışma kitabı ve `yonetim\`
    klasörünün adıdır.
 2. **Yazma hiçbir şeyin üzerine yazmaz, yarım kayıt da okunmaz.** Dosya
    doğrudan son adıyla, “varsa oluşturma” kipinde açılır: aynı adda bir dosya
@@ -65,31 +62,27 @@ kurulsa veri kaybolmaz.
 
 ---
 
-## Kaizen modeli
+## Değerlendirme modeli
 
 **Durum akışı (PDCA)**
 
 | Durum | PDCA | Anlamı |
 |---|---|---|
 | Yeni | — | Henüz incelenmedi |
-| Değerlendirmede | Planla | Kaizen ekibi inceliyor |
+| Değerlendirmede | Planla | Değerlendirme ekibi inceliyor |
 | Planlandı | Planla | Kabul edildi, uygulama planlanıyor |
 | Pilot Uygulamada | Uygula | Sınırlı alanda deneniyor |
 | Ölçümleniyor | Kontrol | Pilot sonuçları ölçülüyor |
 | Standartlaştırıldı | Önlem | Yaygınlaştırıldı, süreç oldu |
 | Beklemede / Reddedildi | — | Şartlar oluşmadı / gerekçesiyle kapatıldı |
 
-**Öncelik matrisi** — etki ve efor 1–5 arası puanlanır:
+**Değerlendirme girdisi iki alandır:** yeni durum ve karar notu / yorum. Puan,
+etki-efor ya da tasarruf rakamı istenmez — değerlendirme, durumu ilerletmek ve
+gerekçeyi yazmaktan ibarettir. Her kayıt geçmişe eklenir; reddedilen bir öneri
+için gerekçe zorunludur.
 
-| | Düşük efor (1–2) | Yüksek efor (3–5) |
-|---|---|---|
-| **Yüksek etki (3–5)** | Hızlı Kazanım — önce bunlar | Büyük Proje — planlama ve kaynak ister |
-| **Düşük etki (1–2)** | Doldurma İşi — boş kapasiteyle | Değerlendirme Dışı — bu haliyle önerilmez |
-
-**Tasarruf kuralı:** Yıllık saat ve TL toplamlarına yalnızca fayda gerçekleşmiş
-sayılan durumlardaki öneriler girer (Pilot Uygulamada, Ölçümleniyor,
-Standartlaştırıldı). Henüz uygulanmamış bir öneri tasarruf olarak sayılsaydı
-pano, gerçekte olmayan bir kazancı yönetime raporlardı.
+**Pano** dört sayı ve iki grafik gösterir: toplam öneri, değerlendirme bekleyen,
+uygulamaya geçmiş, bu ay gelen; durum dağılımı ve son 12 ayın gönderim trendi.
 
 ---
 
@@ -100,8 +93,8 @@ kur.py                    iki kitabı sıfırdan üreten betik
 kaynak\
   tasarim.py              tasarım sistemi (renk, tipografi, ölçü)
   uret_ortak.py           masthead, kart, form alanı, tablo desenleri
-  uret_oneri.py           KaizenOneri.xlsm sayfa düzeni
-  uret_yonetim.py         KaizenYonetim.xlsm sayfa düzeni + grafikler
+  uret_oneri.py           ProjeOneri.xlsm sayfa düzeni
+  uret_yonetim.py         ProjeYonetim.xlsm sayfa düzeni + grafikler
   com_kurulum.py          VBA enjeksiyonu, düğmeler, koruma, .xlsm kaydı
   vba\                    10 modül + iki ThisWorkbook dosyası
 testler\
@@ -140,7 +133,7 @@ Aşağıdakiler tasarımı belirleyen, kolayca gözden kaçan noktalardır:
   yeniden adlandırma yöntemi kullanılamaz: yeniden adlandırma silme yetkisi
   ister ve işletim sistemi reddeder. Dosya doğrudan son adıyla, “varsa
   oluşturma” kipinde yazılır.
-- **Kısa öneri numarası.** `ON-YYMMDD-XXX` biçimindedir; rastgele ekin
+- **Kısa öneri numarası.** `PRJ-YYXXX` biçimindedir (`PRJ-26A7K`); rastgele ekin
   alfabesinden `0/O` ve `1/I` çıkarılmıştır, telefonda söylenirken
   karıştırılmasın diye. Numara kısaldığı için aynı numaranın iki kez üretilme
   ihtimali doğar; bu yüzden yazma işlemi hiçbir dosyanın üzerine yazmaz ve
@@ -165,7 +158,7 @@ Aşağıdakiler tasarımı belirleyen, kolayca gözden kaçan noktalardır:
 2. **Kişi bazlı yetki yok.** Yönetim erişimi tek ortak şifredir. Kayıtlarda
    hangi Windows kullanıcısının işlem yaptığı yazar, ama şifre paylaşıldığı
    için bu kimlik doğrulama değil, yalnızca iz kaydıdır.
-3. **Anlık bildirim yok.** Yeni öneri geldiğinde kimseye haber gitmez; Kaizen
+3. **Anlık bildirim yok.** Yeni öneri geldiğinde kimseye haber gitmez; Değerlendirme
    ekibi kitabı açıp *Önerileri Yenile* demelidir.
 4. **OneDrive ile eşlenmiş klasör.** Geliştirme ve testler OneDrive dışında
    yapılmalıdır; üretim hedefi bir UNC paylaşımıdır (`KURULUM.md` madde 1).

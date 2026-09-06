@@ -16,11 +16,9 @@ listesi mutlaka bir kez uygulanmalidir.
 
 import os
 import sys
-import zipfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import pywintypes
 import yardimci as y
 
 
@@ -35,7 +33,6 @@ def calistir():
             _konsolidasyon(s, app, o)
             _degerlendirme(s, app, o)
             _gostergeler(s, app, o)
-            _rapor(s, app, o)
             _degerlendirme_ekrani(s, app, o)
             _form_ekrani(s, app, o)
 
@@ -58,7 +55,7 @@ def _gonderim(s, app, o):
                y.calistir(app, wb, "modTasarim.KodlamaSinamasi"))
 
         s.esit("Kök klasör kitabın konumundan bulundu",
-               os.path.normcase(o.kaizen),
+               os.path.normcase(o.paylasim),
                os.path.normcase(y.calistir(app, wb, "modAyar.KokKlasor")))
 
         # Form sayfasinda birim/israf alanlari kalmadi.
@@ -93,11 +90,11 @@ def _gonderim(s, app, o):
     s.esit("Üç gönderim üç ayrı dosya oluşturdu", 3, len(dosyalar))
 
     s.kontrol("Öneri numaraları benzersiz", len({o.no1, o.no2, o.no3}) == 3)
-    s.kontrol("Öneri numarası kısa ve ON-YYMMDD-XXX biçiminde",
-              o.no1.startswith("ON-") and len(o.no1) == 13
-              and o.no1.count("-") == 2, o.no1)
+    s.kontrol("Öneri numarası kısa ve PRJ-YYXXX biçiminde",
+              o.no1.startswith("PRJ-") and len(o.no1) == 9
+              and o.no1.count("-") == 1, o.no1)
     s.kontrol("Öneri numarasında karışabilen harf/rakam yok (0 O 1 I)",
-              not set(o.no1.split("-")[2]) & set("O0I1"), o.no1)
+              not set(o.no1.split("-")[1][2:]) & set("O0I1"), o.no1)
 
     s.kontrol("Dosya adı öneri numarasıyla aynı",
               sorted(os.path.splitext(os.path.basename(d))[0] for d in dosyalar)
@@ -150,8 +147,6 @@ def _degerlendirme_ekrani(s, app, o):
         s.kontrol("Öneri metni ekrana geldi",
                   "Sıra yönetimi" in str(ws.Range("dg_baslik").Value or ""),
                   str(ws.Range("dg_baslik").Value))
-        s.esit("Öncelik sınıfı hesaplanıp gösterildi", "Hızlı Kazanım",
-               str(ws.Range("dg_oncelik").Value or ""))
         s.esit("Geçmiş listesinde en yeni değerlendirme üstte",
                "Pilot Uygulamada", str(ws.Cells(34, 4).Value or ""))
 
@@ -162,19 +157,10 @@ def _degerlendirme_ekrani(s, app, o):
         s.kontrol("Gerekçesiz reddetme engellendi",
                   mesaj.startswith("hata:") and "gerekçe" in mesaj, mesaj)
 
-        # Puanlanmadan kabul edilmemeli.
-        _ekrana_yaz(ws, {"dg_yeni_durum": "Planlandı", "dg_etki": "",
-                         "dg_efor": "", "dg_not": "Uygun."})
-        y.calistir(app, wb, "modDegerlendirme.DegerlendirmeKaydet")
-        mesaj = y.son_mesaj(app, wb)
-        s.kontrol("Puanlanmadan kabul engellendi",
-                  mesaj.startswith("hata:") and "etki ve efor" in mesaj, mesaj)
-
         # Gecerli bir kayit
         onceki = len(o.degerlendirme_dosyalar())
         _ekrana_yaz(ws, {
             "dg_yeni_durum": "Ölçümleniyor",
-            "dg_etki": 4, "dg_efor": 2, "dg_saat": 150, "dg_tl": 36000,
             "dg_not": "Pilot sonuçları ölçülmeye başlandı."})
         y.calistir(app, wb, "modDegerlendirme.DegerlendirmeKaydet")
         app.EnableEvents = False        # Kaydet sonrasi yenileme olaylari geri acar
@@ -188,8 +174,8 @@ def _degerlendirme_ekrani(s, app, o):
         y.calistir(app, wb, "modKonsolide.VeriyiKur")
         veri = _veri_satiri(wb, o.no1)
         s.esit("Ekrandan kaydedilen durum uygulandı", "Ölçümleniyor", veri["durum"])
-        s.esit("Ekrandan kaydedilen saat kazanımı uygulandı", 150.0, veri["saat"])
-        s.esit("Ekrandan kaydedilen TL tasarrufu uygulandı", 36000.0, veri["tl"])
+        s.esit("Ekrandan kaydedilen karar notu uygulandı",
+               "Pilot sonuçları ölçülmeye başlandı.", veri["karar_notu"])
 
 
 def _ekrana_yaz(ws, degerler):
@@ -232,7 +218,7 @@ def _form_ekrani(s, app, o):
         s.kontrol("Gönder düğmesi başarı mesajı verdi",
                   mesaj.startswith("bilgi:") and "Öneri numaranız" in mesaj, mesaj)
         s.kontrol("Onay bandı öneri numarasını gösteriyor",
-                  "ON-" in str(ws.Range("frm_bant").Value or ""),
+                  "PRJ-" in str(ws.Range("frm_bant").Value or ""),
                   str(ws.Range("frm_bant").Value))
 
         # Gonderim sonrasi form kendiliginden temizlenmis olmali.
@@ -273,9 +259,9 @@ def _konsolidasyon(s, app, o):
     print("  · konsolidasyon")
 
     # Yarida kesilmis bir yazma taklidi: "kayit_sonu" satiri yok.
-    yarim = os.path.join(o.oneriler_yil(), "ON-260101-ZZZ.txt")
+    yarim = os.path.join(o.oneriler_yil(), "PRJ-26ZZZ.txt")
     with open(yarim, "w", encoding="utf-8") as f:
-        f.write("sema=3\noneri_no=ON-260101-ZZZ\ntarih=2026-01-01T00:00:00\n"
+        f.write("sema=3\noneri_no=PRJ-26ZZZ\ntarih=2026-01-01T00:00:00\n"
                 "ad_soyad=Yarım Kayıt\n")
 
     with y.kitap(app, o.yonetim_kitap) as wb:
@@ -301,21 +287,19 @@ def _konsolidasyon(s, app, o):
         app.EnableEvents = False
         s.esit("“Önerileri Yenile” düğmesi hatasız çalıştı", "",
                y.son_mesaj(app, wb))
-        s.kontrol("Konsol özeti yazıldı",
+        s.kontrol("Liste özeti yazıldı",
                   "öneri okundu" in str(
-                      wb.Worksheets("Konsol").Range("knsl_ozet").Value or ""),
-                  str(wb.Worksheets("Konsol").Range("knsl_ozet").Value))
+                      wb.Worksheets("Liste").Range("liste_ozet").Value or ""),
+                  str(wb.Worksheets("Liste").Range("liste_ozet").Value))
 
-        y.calistir(app, wb, "modKonsolide.KonsoluCiz")
-        ws = wb.Worksheets("Konsol")
-        s.esit("Konsol tablosuna üç satır yazıldı", 3,
+        y.calistir(app, wb, "modKonsolide.ListeyiCiz")
+        ws = wb.Worksheets("Liste")
+        s.esit("Liste tablosuna üç satır yazıldı", 3,
                sum(1 for r in range(9, 20)
-                   if str(ws.Cells(r, 2).Value or "").startswith("ON-")))
+                   if str(ws.Cells(r, 2).Value or "").startswith("PRJ-")))
 
         s.esit("Yeni öneriler 'Yeni' durumuyla başlıyor", "Yeni",
                str(ws.Cells(9, 6).Value or ""))
-        s.esit("Puanlanmamış etki boş gösteriliyor", "",
-               str(ws.Cells(9, 7).Value or ""))
 
     os.remove(yarim)
 
@@ -327,9 +311,9 @@ def _degerlendirme(s, app, o):
     print("  · değerlendirme ve geçmiş")
 
     with y.kitap(app, o.yonetim_kitap) as wb:
-        # Birinci degerlendirme: puanlanir ve planlanir.
+        # Birinci degerlendirme: planlanir.
         y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
-                   o.no1, "Planlandı", 4, 2, 120.0, 30000.0,
+                   o.no1, "Planlandı",
                    "Şube müdürüyle görüşüldü, uygulanabilir.")
 
         dosyalar_1 = o.degerlendirme_dosyalar()
@@ -341,15 +325,12 @@ def _degerlendirme(s, app, o):
 
         veri = _veri_satiri(wb, o.no1)
         s.esit("Durum olaydan türetildi", "Planlandı", veri["durum"])
-        s.esit("Etki puanı uygulandı", 4, veri["etki"])
-        s.esit("Efor puanı uygulandı", 2, veri["efor"])
-        s.esit("Öncelik sınıfı hesaplandı (etki 4 / efor 2)",
-               "Hızlı Kazanım", veri["oncelik"])
+        s.esit("Karar notu uygulandı", "Şube müdürüyle görüşüldü, uygulanabilir.",
+               veri["karar_notu"])
 
-        # Ikinci degerlendirme: YALNIZCA durum degisir, puanlar verilmez.
+        # Ikinci degerlendirme: YALNIZCA durum degisir, not verilmez.
         y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
-                   o.no1, "Pilot Uygulamada", 0, 0, 0.0, 0.0,
-                   "Pilot başladı.")
+                   o.no1, "Pilot Uygulamada", "")
 
         dosyalar_2 = o.degerlendirme_dosyalar()
         s.esit("İkinci değerlendirme ikinci dosyayı ekledi", 2, len(dosyalar_2))
@@ -360,24 +341,21 @@ def _degerlendirme(s, app, o):
         y.calistir(app, wb, "modKonsolide.VeriyiKur")
         veri = _veri_satiri(wb, o.no1)
         s.esit("Son olay durumu belirledi", "Pilot Uygulamada", veri["durum"])
-        s.esit("Kısmi olay önceki etki puanını SİLMEDİ", 4, veri["etki"])
-        s.esit("Kısmi olay önceki efor puanını SİLMEDİ", 2, veri["efor"])
-        s.esit("Kısmi olay önceki saat kazanımını SİLMEDİ", 120.0, veri["saat"])
+        s.esit("Kısmi olay önceki karar notunu SİLMEDİ",
+               "Şube müdürüyle görüşüldü, uygulanabilir.", veri["karar_notu"])
         s.esit("Olay sayısı iki", 2, veri["olay_sayisi"])
 
         # Diger iki oneri: biri reddedilir, biri planlanir ama uygulanmaz.
         y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
-                   o.no2, "Planlandı", 5, 4, 200.0, 50000.0,
-                   "Kabul edildi, BT planına alındı.")
+                   o.no2, "Planlandı", "Kabul edildi, BT planına alındı.")
         y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
-                   o.no3, "Reddedildi", 2, 5, 0.0, 0.0,
-                   "Mevzuat üç imzayı zorunlu kılıyor.")
+                   o.no3, "Reddedildi", "Mevzuat üç imzayı zorunlu kılıyor.")
 
         y.calistir(app, wb, "modKonsolide.VeriyiKur")
-        s.esit("Yüksek etki / yüksek efor = Büyük Proje",
-               "Büyük Proje", _veri_satiri(wb, o.no2)["oncelik"])
-        s.esit("Düşük etki / yüksek efor = Değerlendirme Dışı",
-               "Değerlendirme Dışı", _veri_satiri(wb, o.no3)["oncelik"])
+        s.esit("İkinci öneri planlandı olarak işlendi",
+               "Planlandı", _veri_satiri(wb, o.no2)["durum"])
+        s.esit("Üçüncü öneri reddedildi olarak işlendi",
+               "Reddedildi", _veri_satiri(wb, o.no3)["durum"])
 
         # Gecmis: bir onerinin tum olaylari
         gecmis = y.calistir(app, wb, "modDegerlendirme.OlayDosyalari", o.no1)
@@ -392,21 +370,17 @@ def _veri_satiri(wb, oneri_no):
         if str(ws.Cells(r, 1).Value or "") == oneri_no:
             return {
                 "durum": str(ws.Cells(r, 9).Value or ""),
-                "etki": int(ws.Cells(r, 10).Value or 0),
-                "efor": int(ws.Cells(r, 11).Value or 0),
-                "oncelik": str(ws.Cells(r, 12).Value or ""),
-                "saat": float(ws.Cells(r, 13).Value or 0),
-                "tl": float(ws.Cells(r, 14).Value or 0),
-                "olay_sayisi": int(ws.Cells(r, 19).Value or 0),
+                "karar_notu": str(ws.Cells(r, 13).Value or ""),
+                "olay_sayisi": int(ws.Cells(r, 14).Value or 0),
             }
     raise AssertionError(f"Veri sayfasında bulunamadı: {oneri_no}")
 
 
 # ==========================================================================
-#  4. Gostergeler -- tasarruf kurali
+#  4. Gostergeler
 # ==========================================================================
 def _gostergeler(s, app, o):
-    print("  · göstergeler ve tasarruf kuralı")
+    print("  · göstergeler")
 
     with y.kitap(app, o.yonetim_kitap) as wb:
         y.calistir(app, wb, "modKonsolide.VeriyiKur")
@@ -414,33 +388,25 @@ def _gostergeler(s, app, o):
         g = dict(p.split("=", 1) for p in ham.split(";"))
 
         s.esit("Toplam öneri", "3", g["toplam"])
+
+        # Panodaki kartlarin govdesi hucre degil SEKILDIR; rakam hucrede
+        # durur ama ekranda sekil gorunur. Ikisi ayrisirsa kullanici yanlis
+        # sayiya bakar -- bu kontrol o ayrisan durumu yakalar.
+        s.esit("Kart şekli toplam öneriyi gösteriyor", "3",
+               y.calistir(app, wb, "modPano.TestKartMetni", "pano_toplam"))
         s.esit("Bekleyen öneri yok (üçü de sonuçlandı)", "0", g["bekleyen"])
         s.esit("Uygulamaya geçmiş bir öneri", "1", g["uygulanan"])
+        s.esit("Bu ay gelen öneri sayısı", "3", g["bu_ay"])
 
-        # KRITIK: 2 numarali oneri "Planlandi" -- 200 saat / 50.000 TL girmisti.
-        # Planlandi henuz uygulanmis sayilmaz; toplama GIRMEMELIDIR.
-        s.esit("Tasarruf yalnızca uygulanmış öneriden sayıldı (saat)",
-               120.0, float(g["saat"]))
-        s.esit("Tasarruf yalnızca uygulanmış öneriden sayıldı (TL)",
-               30000.0, float(g["tl"]))
-
-        s.esit("Hızlı kazanım sayısı", "1", g["hizli"])
-        s.esit("Matris: Hızlı Kazanım", "1", g["mtx_hizli"])
-        s.esit("Matris: Büyük Proje", "1", g["mtx_buyuk"])
-        s.esit("Matris: Değerlendirme Dışı", "1", g["mtx_disi"])
-
-        # Simdi 2 numarali oneriyi uygulamaya al: tasarruf artik sayilmali.
+        # "Planlandi" henuz uygulanmis sayilmaz; ikinci oneri uygulamaya
+        # alininca sayac artmalidir.
         y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
-                   o.no2, "Standartlaştırıldı", 0, 0, 0.0, 0.0,
-                   "Tüm operasyona yaygınlaştırıldı.")
+                   o.no2, "Standartlaştırıldı", "Tüm operasyona yaygınlaştırıldı.")
         y.calistir(app, wb, "modKonsolide.VeriyiKur")
         ham = y.calistir(app, wb, "modPano.TestGostergeleri")
         g = dict(p.split("=", 1) for p in ham.split(";"))
 
-        s.esit("Uygulamaya geçince tasarruf toplama eklendi (saat)",
-               320.0, float(g["saat"]))
-        s.esit("Uygulamaya geçince tasarruf toplama eklendi (TL)",
-               80000.0, float(g["tl"]))
+        s.esit("Uygulamaya geçince sayaç arttı", "2", g["uygulanan"])
 
         # Grafik kaynak verisi
         pv = wb.Worksheets("PanoVeri")
@@ -461,62 +427,6 @@ def _gostergeler(s, app, o):
         s.kontrol("Grafiklerde başlık ve gösterge kapalı",
                   all(not co.Chart.HasTitle and not co.Chart.HasLegend
                       for co in pano.ChartObjects()))
-
-
-# ==========================================================================
-#  5. Parolali rapor
-# ==========================================================================
-def _rapor(s, app, o):
-    print("  · parolalı rapor")
-
-    parola = "Kaizen!2026"
-    with y.kitap(app, o.yonetim_kitap) as wb:
-        y.calistir(app, wb, "modKonsolide.VeriyiKur")
-        yol = y.calistir(app, wb, "modRapor.TestRaporu", "Tümü", parola)
-
-    s.kontrol("Rapor dosyası üretildi", bool(yol) and os.path.exists(yol), yol)
-    if not yol or not os.path.exists(yol):
-        return
-
-    s.kontrol("Rapor 'rapor' klasörüne yazıldı",
-              os.path.normcase(os.path.dirname(yol)) == os.path.normcase(o.rapor))
-
-    # Sifreli bir dosya OLE bilesik belgesidir; duz .xlsx (ZIP) degildir.
-    with open(yol, "rb") as f:
-        imza = f.read(8)
-    s.kontrol("Rapor şifreli kapsayıcıya yazıldı (düz ZIP değil)",
-              imza == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", imza.hex())
-
-    # Düz .xlsx bir ZIP arşividir; şifrelenmiş dosya ZIP olarak okunamaz.
-    zip_olarak_okundu = True
-    try:
-        zipfile.ZipFile(yol)
-    except zipfile.BadZipFile:
-        zip_olarak_okundu = False
-    s.kontrol("İçerik parolasız okunamıyor (ZIP olarak açılmıyor)",
-              not zip_olarak_okundu)
-
-    yanlis_parolayla_acildi = False
-    try:
-        wb2 = y.sifreli_ac(app, yol, "yanlis-parola")
-        wb2.Close(SaveChanges=False)
-        yanlis_parolayla_acildi = True
-    except pywintypes.com_error:
-        pass
-    s.kontrol("Yanlış parolayla AÇILAMIYOR", not yanlis_parolayla_acildi)
-
-    try:
-        wb3 = y.sifreli_ac(app, yol, parola)
-        sayfalar = {ws.Name for ws in wb3.Worksheets}
-        satir_sayisi = wb3.Worksheets("Öneriler").UsedRange.Rows.Count
-        ozet_baslik = str(wb3.Worksheets("Özet").Range("B2").Value or "")
-        wb3.Close(SaveChanges=False)
-        s.kontrol("Doğru parolayla açılıyor", True)
-        s.esit("Rapor iki sayfadan oluşuyor", {"Özet", "Öneriler"}, sayfalar)
-        s.esit("Rapor tablosunda başlık + üç öneri var", 4, satir_sayisi)
-        s.esit("Rapor kapak başlığı yazıldı", "Kaizen Yönetim Raporu", ozet_baslik)
-    except pywintypes.com_error as hata:
-        s.kontrol("Doğru parolayla açılıyor", False, str(hata))
 
 
 if __name__ == "__main__":

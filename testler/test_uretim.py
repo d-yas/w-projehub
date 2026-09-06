@@ -31,8 +31,8 @@ import yardimci as y                                   # noqa: E402
 CIKTI = os.path.join(KOK, "cikti")
 VBA = os.path.join(KOK, "kaynak", "vba")
 
-ONERI = os.path.join(CIKTI, "KaizenOneri.xlsm")
-YONETIM = os.path.join(CIKTI, "yonetim", "KaizenYonetim.xlsm")
+ONERI = os.path.join(CIKTI, "ProjeOneri.xlsm")
+YONETIM = os.path.join(CIKTI, "yonetim", "ProjeYonetim.xlsm")
 
 
 def _bas_oku(ad):
@@ -79,6 +79,38 @@ def _vba_dizi(kaynak, fonksiyon, sabitler):
     return sonuc
 
 
+# VBA'da modul duzeyi degiskenler YALNIZCA bildirim bolumunde -- ilk
+# Sub/Function'dan once -- durabilir. Yordamlarin arasina konan bir
+# "Private x As Boolean" modulu DERLENMEZ; uretim ve dugme dogrulamasi bunu
+# gormez, hata ancak o yordam ilk kez calistirildiginda ortaya cikar.
+# Gorunmeyen bir Excel'de ise hic gorunmez: makro sessizce geri donmez.
+_YORDAM = re.compile(r"^\s*(?:Public\s+|Private\s+|Friend\s+)?"
+                     r"(?:Static\s+)?(?:Sub|Function|Property)\s", re.I)
+_BILDIRIM = re.compile(r"^(?:Public|Private|Dim)\s+(?!Sub|Function|"
+                       r"Property|Const|Type|Enum|Declare)"
+                       r"(\w+)", re.I)
+
+
+def _gec_kalmis_bildirimler(kaynak):
+    """Ilk yordamdan SONRA gelen modul duzeyi degisken bildirimleri."""
+    yordam_gorundu = False
+    sorunlar = []
+    for satir in kaynak.splitlines():
+        if _YORDAM.match(satir):
+            yordam_gorundu = True
+        elif yordam_gorundu:
+            e = _BILDIRIM.match(satir)
+            if e:
+                sorunlar.append(e.group(1))
+    return sorunlar
+
+
+def uret_yonetim_modulu():
+    """uret_yonetim, KAYNAK sys.path'e eklendikten sonra import edilebilir."""
+    import uret_yonetim
+    return uret_yonetim
+
+
 def calistir():
     s = y.Sonuc("Üretim")
 
@@ -86,7 +118,7 @@ def calistir():
     # 1. Dosyalar ve VBA projesi
     # ----------------------------------------------------------------------
     print("  · üretilen dosyalar")
-    for ad, yol in (("KaizenOneri.xlsm", ONERI), ("KaizenYonetim.xlsm", YONETIM)):
+    for ad, yol in (("ProjeOneri.xlsm", ONERI), ("ProjeYonetim.xlsm", YONETIM)):
         if not s.kontrol(f"{ad} üretildi", os.path.exists(yol), yol):
             continue
         with zipfile.ZipFile(yol) as z:
@@ -127,35 +159,39 @@ def calistir():
               str([dv.formula1 for dv in ws.data_validations.dataValidation]))
 
     wb2 = load_workbook(YONETIM, keep_vba=True)
-    s.esit("Yönetim kitabı sekiz sayfadan oluşuyor",
-           {"Giriş", "Konsol", "Değerlendirme", "Pano", "Rapor",
+    s.esit("Yönetim kitabı yedi sayfadan oluşuyor",
+           {"Giriş", "Liste", "Değerlendirme", "Pano",
             "Veri", "PanoVeri", "Listeler"}, set(wb2.sheetnames))
+    s.esit("Pano kitaptaki ilk sayfa", "Pano", wb2.sheetnames[0])
     s.kontrol("Çalışma sayfaları girişten önce gizli",
               all(wb2[a].sheet_state == "veryHidden"
-                  for a in ("Konsol", "Değerlendirme", "Pano", "Rapor",
+                  for a in ("Liste", "Değerlendirme", "Pano",
                             "Veri", "PanoVeri")))
+    s.esit("Kitap giriş ekranı etkinken kaydedildi", "Giriş",
+           wb2.active.title)
 
-    pano_adlari = {"pano_toplam", "pano_bekleyen", "pano_uygulanan", "pano_saat",
-                   "pano_tl", "pano_hizli", "pano_kabul_orani",
-                   "pano_yanit_suresi", "pano_bu_ay", "pano_mtx_hizli",
-                   "pano_mtx_buyuk", "pano_mtx_doldurma", "pano_mtx_disi",
-                   "pano_guncelleme"}
+    pano_adlari = {"pano_toplam", "pano_bekleyen", "pano_uygulanan",
+                   "pano_bu_ay", "pano_guncelleme"}
     deg_adlari = {"dg_bant", "dg_oneri_no", "dg_tarih", "dg_gonderen",
                   "dg_baslik", "dg_mevcut", "dg_cozum", "dg_fayda",
-                  "dg_yeni_durum", "dg_etki", "dg_efor",
-                  "dg_oncelik", "dg_saat", "dg_tl", "dg_not"}
-    diger = {"knsl_ozet", "veri_adet", "rpr_donem", "rpr_son"}
+                  "dg_yeni_durum", "dg_not"}
+    diger = {"liste_ozet", "veri_adet"}
     eksik = (pano_adlari | deg_adlari | diger) - set(wb2.defined_names)
     s.kontrol("Yönetim kitabının tüm adlandırılmış aralıkları yerinde",
               not eksik, str(sorted(eksik)))
 
-    konsol = wb2["Konsol"]
-    s.esit("Konsolda başlık satırı ve ilk sütunlar donduruldu", "C9",
-           konsol.freeze_panes)
+    liste = wb2["Liste"]
+    s.esit("Listede başlık satırı ve ilk sütunlar donduruldu", "C9",
+           liste.freeze_panes)
     cf = {str(alan.sqref): len(kurallar)
-          for alan, kurallar in konsol.conditional_formatting._cf_rules.items()}
+          for alan, kurallar in liste.conditional_formatting._cf_rules.items()}
     s.esit("Durum sütununda sekiz durumun sekiz rengi var", 8, cf.get("F9:F2000"))
-    s.esit("Öncelik sütununda dört sınıfın dört rengi var", 4, cf.get("I9:I2000"))
+
+    # Panoda dort KPI karti tek sirada durur; bos kart yuvasi kalmamalidir.
+    s.esit("Panoda dört KPI kartı tanımlı", 4,
+           len(uret_yonetim_modulu().PANO_KART_SUTUNLARI))
+    s.esit("Her KPI kartının bir göstergesi var", 4,
+           len(uret_yonetim_modulu().PANO_KARTLARI))
 
     # ----------------------------------------------------------------------
     # 3. Kopyalanan bilgi tutarli mi?
@@ -166,16 +202,16 @@ def calistir():
     import tasarim
     import uret_yonetim
 
-    s.kontrol("Renkler: tasarim.py ile modTasarim.bas aynı",
-              kur.tasarim_tutarliligini_dogrula() > 0)
+    s.esit("Renkler: tasarim.py ile modTasarim.bas aynı (35 renk)", 35,
+           kur.tasarim_tutarliligini_dogrula())
 
     konsolide = _bas_oku("modKonsolide.bas")
     for py_deger, vba_ad, aciklama in (
-        (uret_yonetim.KONSOL_ILK_SATIR, "KONSOL_ILK_SATIR", "tablonun ilk satırı"),
-        (uret_yonetim.KONSOL_ILK_SUTUN, "KONSOL_ILK_SUTUN", "tablonun ilk sütunu"),
-        (uret_yonetim.KONSOL_SON_SUTUN, "KONSOL_SON_SUTUN", "tablonun son sütunu"),
+        (uret_yonetim.LISTE_ILK_SATIR, "LISTE_ILK_SATIR", "tablonun ilk satırı"),
+        (uret_yonetim.LISTE_ILK_SUTUN, "LISTE_ILK_SUTUN", "tablonun ilk sütunu"),
+        (uret_yonetim.LISTE_SON_SUTUN, "LISTE_SON_SUTUN", "tablonun son sütunu"),
     ):
-        s.esit(f"Konsol koordinatı — {aciklama}", py_deger,
+        s.esit(f"Liste koordinatı — {aciklama}", py_deger,
                _vba_sabiti(konsolide, vba_ad))
 
     degerlendirme = _bas_oku("modDegerlendirme.bas")
@@ -194,23 +230,32 @@ def calistir():
     s.esit("Veri sayfasının sütun sayısı", len(uret_yonetim.VERI_BASLIKLARI),
            _vba_sabiti(konsolide, "V_SUTUN_SAYISI"))
 
-    # Esik degerleri belgede anlatilanla ayni mi?
-    ayar = _bas_oku("modAyar.bas")
-    s.esit("Yüksek etki eşiği 3", 3, _vba_sabiti(ayar, "ESIK_YUKSEK_ETKI"))
-    s.esit("Düşük efor eşiği 2", 2, _vba_sabiti(ayar, "ESIK_DUSUK_EFOR"))
-
     # ----------------------------------------------------------------------
     # 4. VBA kaynaklari
     # ----------------------------------------------------------------------
     print("  · VBA kaynak dosyaları")
     bas_dosyalari = [d for d in os.listdir(VBA) if d.endswith(".bas")]
-    s.kontrol("On VBA modülü var", len(bas_dosyalari) == 10, str(len(bas_dosyalari)))
+    s.kontrol("Dokuz VBA modülü var", len(bas_dosyalari) == 9,
+              str(len(bas_dosyalari)))
     for d in sorted(bas_dosyalari):
         kaynak = _bas_oku(d)
         ad = os.path.splitext(d)[0]
         s.kontrol(f"{d} modül adını bildiriyor",
                   re.search(rf'Attribute VB_Name = "{ad}"', kaynak) is not None)
         s.kontrol(f"{d} Option Explicit kullanıyor", "Option Explicit" in kaynak)
+        gec = _gec_kalmis_bildirimler(kaynak)
+        s.kontrol(f"{d} modül değişkenleri bildirim bölümünde", not gec,
+                  ", ".join(gec))
+
+    # Testlerin BAGIMLI oldugu giris noktalari. Bunlardan biri kaybolursa
+    # her uctan uca test 90 saniye donup "makro yanıt vermiyor" der; sebebi
+    # ise eksik yordam yuzunden modulun derlenmemesidir. Burada adiyla
+    # aranmalari, o teshisi saniyelere indirir.
+    ui = _bas_oku("modUI.bas")
+    for yordam in ("SessizModAyarla", "SessizMi", "SonMesaj", "MesajKaydet",
+                   "OturumAc", "OturumKapat", "KorumalariKur"):
+        s.kontrol(f"modUI.bas {yordam} tanımlıyor",
+                  re.search(rf"(Sub|Function)\s+{yordam}\s*\(", ui) is not None)
 
     return s.bitir()
 

@@ -20,13 +20,12 @@ DIKEY, YATAY = 1, 2
 
 # (kitap, sayfa, aralik, yon) -- aralik ekranin tasarlanmis sinirlarini kapsar
 GORUNUMLER = [
-    ("oneri", "Giriş", "A1:G22", DIKEY),
-    ("oneri", "Öneri Formu", "A1:G36", DIKEY),
-    ("yonetim", "Giriş", "A1:G13", DIKEY),
-    ("yonetim", "Konsol", "A1:L20", YATAY),
+    ("oneri", "Giriş", "A1:G16", DIKEY),
+    ("oneri", "Öneri Formu", "A1:G34", DIKEY),
+    ("yonetim", "Giriş", "A1:G16", DIKEY),
+    ("yonetim", "Liste", "A1:G22", YATAY),
     ("yonetim", "Değerlendirme", "A1:G48", DIKEY),
-    ("yonetim", "Pano", "A1:J51", DIKEY),
-    ("yonetim", "Rapor", "A1:F17", DIKEY),
+    ("yonetim", "Pano", "A1:M33", YATAY),
 ]
 
 
@@ -91,23 +90,21 @@ def calistir(hedef_klasor):
             wb = acik["yonetim"]
 
             y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
-                       numaralar[0], "Pilot Uygulamada", 4, 2,
-                       120.0, 30000.0, "Şube müdürüyle görüşüldü.")
+                       numaralar[0], "Pilot Uygulamada",
+                       "Şube müdürüyle görüşüldü.")
             y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
                        numaralar[1], "Standartlaştırıldı",
-                       5, 3, 200.0, 50000.0, "Tüm operasyona yaygınlaştırıldı.")
+                       "Tüm operasyona yaygınlaştırıldı.")
             y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
-                       numaralar[2], "Reddedildi", 2, 5,
-                       0.0, 0.0, "Mevzuat üç imzayı zorunlu kılıyor.")
+                       numaralar[2], "Reddedildi",
+                       "Mevzuat üç imzayı zorunlu kılıyor.")
             y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
-                       numaralar[3], "Değerlendirmede",
-                       3, 4, 0.0, 0.0, "İnceleniyor.")
+                       numaralar[3], "Değerlendirmede", "İnceleniyor.")
 
             # Kullanicinin bastigi dugmenin tam yolu: ozet satiri da dolsun.
             y.calistir(app, wb, "modKonsolide.OnerileriYenile")
             app.EnableEvents = False
             y.calistir(app, wb, "modDegerlendirme.OneriyiAc", numaralar[0])
-            wb.Worksheets("Rapor").Range("rpr_donem").Value = "Tümü"
 
             for kitap_anahtar, sayfa, aralik, yon in GORUNUMLER:
                 ad = f"{kitap_anahtar}-{sayfa.replace(' ', '-')}.pdf"

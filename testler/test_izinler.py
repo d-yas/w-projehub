@@ -42,8 +42,8 @@ KULLANICI = f"{os.environ.get('USERDOMAIN', '')}\\{os.environ.get('USERNAME', ''
 BIRAKMA_KUTUSU = "(OI)(CI)(WD,AD,X,RA,REA,WA,WEA,RC)"
 
 # "yonetim\" klasoru: YALNIZCA GECIS, miras bayragi YOK.
-# Miras bayragi olmadigi icin kardes klasorlere (degerlendirme, rapor)
-# hicbir hak sizmaz.
+# Miras bayragi olmadigi icin kardes klasore (degerlendirme) hicbir hak
+# sizmaz.
 YONETIM_GECIS = "(X)"
 
 
@@ -64,25 +64,25 @@ def _engellendi_mi(islem):
 def calistir():
     s = y.Sonuc("İzinler")
 
-    kok = tempfile.mkdtemp(prefix="kaizen_izin_")
+    kok = tempfile.mkdtemp(prefix="proje_izin_")
     o = y.Ortam(kok)
     yil_klasoru = o.oneriler_yil()
 
     try:
         # Yil klasoru BILEREK acilmaz: uretimde de kodun kendisi olusturur ve
         # izinleri "oneriler"den miras alir.
-        for d in (o.oneriler, o.degerlendirme, o.rapor):
+        for d in (o.oneriler, o.degerlendirme):
             os.makedirs(d, exist_ok=True)
 
-        kaynak = os.path.join(y.CIKTI, "KaizenOneri.xlsm")
+        kaynak = os.path.join(y.CIKTI, "ProjeOneri.xlsm")
         if not os.path.exists(kaynak):
-            raise SystemExit("cikti\\KaizenOneri.xlsm yok. Önce: python kur.py")
+            raise SystemExit("cikti\\ProjeOneri.xlsm yok. Önce: python kur.py")
         shutil.copy2(kaynak, o.oneri_kitap)
 
         # Personelin asla gormemesi gereken bir degerlendirme notu
-        gizli_not = os.path.join(o.degerlendirme, "ON-260101-AAA_2026010100000000_1A2B.txt")
+        gizli_not = os.path.join(o.degerlendirme, "PRJ-26AAA_2026010100000000_1A2B.txt")
         with open(gizli_not, "w", encoding="utf-8") as f:
-            f.write("oneri_no=ON-260101-AAA\nkarar_notu=Gizli karar gerekçesi\n"
+            f.write("oneri_no=PRJ-26AAA\nkarar_notu=Gizli karar gerekçesi\n"
                     "kayit_sonu=1\n")
         with open(o.yonetim_kitap, "wb") as f:
             f.write(b"yonetim kitabinin yerine gecen dosya")
@@ -99,7 +99,7 @@ def calistir():
             return 0
 
         # Yönetim tarafının geri kalanı: personele yalnızca "izinleri gör".
-        for hedef in (o.degerlendirme, o.rapor, gizli_not, o.yonetim_kitap):
+        for hedef in (o.degerlendirme, gizli_not, o.yonetim_kitap):
             icacls(hedef, "/inheritance:r")
             icacls(hedef, "/grant", f"{KULLANICI}:(RC)")
 
@@ -117,8 +117,6 @@ def calistir():
                       lambda: open(gizli_not, "a", encoding="utf-8").write("x")))
         s.kontrol("Yönetim kitabı okunamıyor",
                   _engellendi_mi(lambda: open(o.yonetim_kitap, "rb").read()))
-        s.kontrol("Rapor klasörü listelenemiyor",
-                  _engellendi_mi(lambda: os.listdir(o.rapor)))
         s.kontrol("Öneriler klasörü listelenemiyor",
                   _engellendi_mi(lambda: os.listdir(o.oneriler)))
 
@@ -128,7 +126,7 @@ def calistir():
         with y.excel() as app:
             with y.kitap(app, o.oneri_kitap, salt_okunur=True) as wb:
                 s.esit("Kök klasör kilitli yapıda da bulunuyor",
-                       os.path.normcase(o.kaizen),
+                       os.path.normcase(o.paylasim),
                        os.path.normcase(y.calistir(app, wb, "modAyar.KokKlasor")))
                 for i in (1, 2):
                     numaralar.append(y.calistir(
@@ -138,10 +136,10 @@ def calistir():
                         "Bir çözüm önerisi.", "Fayda"))
 
         s.kontrol("Kilitli klasöre gönderim yapılabildi",
-                  all(n.startswith("ON-") for n in numaralar), str(numaralar))
+                  all(n.startswith("PRJ-") for n in numaralar), str(numaralar))
         s.esit("İki gönderim iki farklı numara aldı", 2, len(set(numaralar)))
 
-        if all(n.startswith("ON-") for n in numaralar):
+        if all(n.startswith("PRJ-") for n in numaralar):
             ilk = os.path.join(yil_klasoru, numaralar[0] + ".txt")
             s.kontrol("Bırakılan öneri okunamıyor",
                       _engellendi_mi(lambda: open(ilk, encoding="utf-8").read()))

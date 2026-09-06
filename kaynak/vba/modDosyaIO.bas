@@ -113,8 +113,8 @@ End Sub
 ' ---------------------------------------------------------------------------
 '  YerelYol -- OneDrive/SharePoint adresini diskteki gercek klasore cevirir.
 '
-'  Ornek:  https://kurum-my.sharepoint.com/personal/x/Documents/Masaüstü/kaizen
-'          -> C:\Users\x\OneDrive - Kurum\Masaüstü\kaizen
+'  Ornek:  https://kurum-my.sharepoint.com/personal/x/Documents/Masaüstü/projeoneri
+'          -> C:\Users\x\OneDrive - Kurum\Masaüstü\projeoneri
 '
 '  Yontem: adresin sonundan baslayarak gitgide uzayan parcalar, bilinen yerel
 '  OneDrive koklerinin altinda aranir; diskte gercekten var olan ilk eslesme

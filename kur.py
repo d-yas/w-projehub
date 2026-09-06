@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-r"""Kaizen Öneri Sistemi -- üretim betiği.
+r"""Proje Öneri Sistemi -- üretim betiği.
 
     python kur.py            iki kitabı da üretir
-    python kur.py oneri      yalnızca KaizenOneri.xlsm
-    python kur.py yonetim    yalnızca KaizenYonetim.xlsm
+    python kur.py oneri      yalnızca ProjeOneri.xlsm
+    python kur.py yonetim    yalnızca ProjeYonetim.xlsm
 
 Çalışma kitapları elle hazırlanmaz; kaynak kod düz metin dosyalarında durur
 (kaynak\vba\*.bas ve kaynak\uret_*.py), kitaplar buradan sıfırdan üretilir.
@@ -76,7 +76,6 @@ def listeler():
     return {
         "durum": ["Yeni", "Değerlendirmede", "Planlandı", "Pilot Uygulamada",
                   "Ölçümleniyor", "Standartlaştırıldı", "Beklemede", "Reddedildi"],
-        "puan": [1, 2, 3, 4, 5],
     }
 
 
@@ -96,9 +95,9 @@ def oneri_tanimi():
     import uret_oneri
 
     taslak = os.path.join(CIKTI, "_taslak_oneri.xlsx")
-    hedef = os.path.join(CIKTI, "KaizenOneri.xlsm")
+    hedef = os.path.join(CIKTI, "ProjeOneri.xlsm")
     return {
-        "ad": "KaizenOneri.xlsm",
+        "ad": "ProjeOneri.xlsm",
         "taslak": taslak,
         "hedef": hedef,
         "uret": lambda: uret_oneri.kitap_uret(taslak, listeler()),
@@ -110,17 +109,21 @@ def oneri_tanimi():
         "dugmeler": [
             {"sayfa": uret_oneri.SAYFA_GIRIS,
              "hucre": uret_oneri.DUGME_YERLERI["giris"],
-             "metin": "Sisteme Gir  →", "makro": "SistemeGir", "birincil": True},
+             "metin": "Sisteme Gir  →", "makro": "SistemeGir",
+             "varyant": "birincil"},
             {"sayfa": uret_oneri.SAYFA_FORM,
              "hucre": uret_oneri.DUGME_YERLERI["gonder"],
-             "metin": "Öneriyi Gönder", "makro": "OneriGonder", "birincil": True},
+             "metin": "Öneriyi Gönder", "makro": "OneriGonder",
+             "varyant": "birincil"},
             {"sayfa": uret_oneri.SAYFA_FORM,
              "hucre": uret_oneri.DUGME_YERLERI["temizle"],
-             "metin": "Formu Temizle", "makro": "FormuTemizle", "birincil": False},
+             "metin": "Formu Temizle", "makro": "FormuTemizle",
+             "varyant": "ikincil",
+             "sol_kaydir": uret_oneri.DUGME_KAYDIR["temizle"]},
             {"sayfa": uret_oneri.SAYFA_FORM,
              "hucre": uret_oneri.DUGME_YERLERI["cikis"],
-             "metin": "Çıkış", "makro": "Cikis", "birincil": False,
-             "genislik": 78.0, "yukseklik": 24.0},
+             "metin": "Çıkış", "makro": "Cikis", "varyant": "sessiz",
+             "genislik": 78.0, "yukseklik": 26.0},
         ],
         "ek_islem": None,
     }
@@ -130,15 +133,15 @@ def yonetim_tanimi():
     import uret_yonetim
 
     taslak = os.path.join(CIKTI, "_taslak_yonetim.xlsx")
-    hedef = os.path.join(CIKTI, "yonetim", "KaizenYonetim.xlsm")
+    hedef = os.path.join(CIKTI, "yonetim", "ProjeYonetim.xlsm")
     return {
-        "ad": "KaizenYonetim.xlsm",
+        "ad": "ProjeYonetim.xlsm",
         "taslak": taslak,
         "hedef": hedef,
         "uret": lambda: uret_yonetim.kitap_uret(taslak, listeler()),
         "moduller": _bas("modTasarim", "modAyar", "modDosyaIO", "modModel",
                          "modUI", "modKonsolide", "modDegerlendirme",
-                         "modPano", "modRapor"),
+                         "modPano"),
         "thisworkbook": _thisworkbook("ThisWorkbook_Yonetim.vba"),
         "dugmeler": uret_yonetim.DUGMELER,
         "ek_islem": uret_yonetim.com_ek_islem,
@@ -152,7 +155,7 @@ TANIMLAR = {"oneri": oneri_tanimi, "yonetim": yonetim_tanimi}
 #  4. Uretim
 # ==========================================================================
 def uret(secilenler):
-    print("Kaizen Öneri Sistemi — üretim")
+    print("Proje Öneri Sistemi — üretim")
     print("=" * 62)
 
     sayi = tasarim_tutarliligini_dogrula()
@@ -173,7 +176,7 @@ def uret(secilenler):
                     app, t["taslak"], t["hedef"], t["moduller"],
                     t["thisworkbook"], t["dugmeler"],
                     ek_islem=t["ek_islem"],
-                    koruma_sifresi="kzn-koruma",
+                    koruma_sifresi="po-koruma",
                 )
                 print(f"  [3/4] VBA + düğme eklendi        {t['ad']}  "
                       f"({len(modul_adlari)} modül, {len(t['dugmeler'])} düğme)")

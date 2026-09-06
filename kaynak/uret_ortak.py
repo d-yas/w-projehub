@@ -1,10 +1,19 @@
 # -*- coding: utf-8 -*-
-"""openpyxl tasarim yardimcilari.
+"""openpyxl tasarim yardimcilari -- gorsel dilin tek tanim yeri.
 
 Bu modul "Excel'de nasil iyi gorunur" sorusunun tek cevap yeridir: masthead,
-kart, bolum basligi, form alani, tablo basligi ve rozet desenleri burada
-tanimlanir. Sayfa uretici betikler (uret_oneri, uret_yonetim) yalnizca bu
-desenleri cagirir; boylece iki kitap gorsel olarak ayni dili konusur.
+kart, bolum basligi, form alani, tablo ve rozet desenleri burada tanimlanir.
+Sayfa uretici betikler (uret_oneri, uret_yonetim) yalnizca bu desenleri
+cagirir; boylece iki kitap gorsel olarak ayni dili konusur.
+
+Gorsel dilin uc kurali:
+  1. ZEMIN acik, ICERIK beyaz. Sayfa BUZ_ZEMIN ile boyanir; okunacak her sey
+     (kart, tablo govdesi, giris alani) beyaz bir yuzeye oturur. Katman farki
+     kutu cizmeden hiyerarsi kurar.
+  2. CIZGI ince ve soluk. Kalin kenarlik yerine hairline; ayirma isini
+     bosluk yapar, cizgi yalnizca hatirlatir.
+  3. BOSLUK ucuzdur. Satir yuksekligi ve dar ara sutunlar arayuzun nefes
+     almasini saglar; kalabalik bir ekrani hicbir renk kurtarmaz.
 """
 
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Protection, Side
@@ -12,7 +21,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.workbook.defined_name import DefinedName
 
 from tasarim import (DURUM_RENK, FONT_AILE, FONT_BASLIK_AILE, OLCU,
-                     ONCELIK_RENK, PT, RENK, URUN_ADI)
+                     PT, RENK, URUN_ADI)
 
 
 # --------------------------------------------------------------------------
@@ -58,45 +67,48 @@ def aralik(ws, r1, c1, r2, c2):
 
 
 def adres(r1, c1, r2=None, c2=None) -> str:
-    if r2 is None:
-        return f"{get_column_letter(c1)}{r1}"
-    return f"{get_column_letter(c1)}{r1}:{get_column_letter(c2)}{r2}"
+    ilk = f"{get_column_letter(c1)}{r1}"
+    if r2 is None or c2 is None:
+        return ilk
+    return f"{ilk}:{get_column_letter(c2)}{r2}"
 
 
 def blok_doldur(ws, r1, c1, r2, c2, hex_kod):
-    d = dolgu(hex_kod)
+    f = dolgu(hex_kod)
     for h in aralik(ws, r1, c1, r2, c2):
-        h.fill = d
-
-
-def cerceve(ws, r1, c1, r2, c2, hex_kod=RENK["CIZGI_GRI"],
-            golge_hex=None, stil="thin"):
-    """Blogun disina cerceve cizer. golge_hex verilirse sag ve alt kenar
-    daha koyu cizilir; Excel'de golge olmadigi icin derinlik hissi boyle verilir."""
-    ince = kenar(hex_kod, stil)
-    koyu = kenar(golge_hex, "medium") if golge_hex else ince
-    for r in range(r1, r2 + 1):
-        for c in range(c1, c2 + 1):
-            h = ws.cell(row=r, column=c)
-            h.border = Border(
-                top=ince if r == r1 else None,
-                bottom=(koyu if r == r2 else None),
-                left=ince if c == c1 else None,
-                right=(koyu if c == c2 else None),
-            )
+        h.fill = f
 
 
 def birlestir(ws, r1, c1, r2, c2):
-    """Hucreleri birlestirir.
+    """Hucreleri birlestirir ve sol ust hucreyi dondurur.
 
-    Tek hucrelik "birlestirme" (C24:C24) Excel'de gecerli ama bozuk bir
-    durumdur: hucre birlesik sayilir ve ClearContents gibi islemler
-    "birleştirilmiş bir hücrede bunu yapamayız" hatasi verir. Bu yuzden
-    1×1 aralikta birlestirme yapilmaz.
+    1x1 aralikta birlestirme YAPILMAZ: tek hucrelik bir merge, VBA tarafinda
+    ClearContents cagrisini "bu islemi birlestirilmis bir hucrede yapamayiz"
+    hatasina dusuruyor.
     """
-    if r1 != r2 or c1 != c2:
+    if (r1, c1) != (r2, c2):
         ws.merge_cells(start_row=r1, start_column=c1, end_row=r2, end_column=c2)
     return ws.cell(row=r1, column=c1)
+
+
+def cerceve(ws, r1, c1, r2, c2, hex_kod=RENK["CIZGI_GRI"], golge_hex=None, stil="thin"):
+    """Bir blogun cevresine hairline cerceve cizer.
+
+    golge_hex verilirse ALT kenar bir ton koyu olur. Excel'de hucrelerin
+    golgesi yoktur; "isik ustten geliyor" hissi bu tek tonluk farkla verilir.
+    Eskiden alt/sag kenar "medium" kalinliktaydi; kalin kenarlik yuzey degil
+    cerceve gibi durdugu icin hairline'a indirildi.
+    """
+    ince = kenar(hex_kod, stil)
+    koyu = kenar(golge_hex, stil) if golge_hex else ince
+    for r in range(r1, r2 + 1):
+        for c in range(c1, c2 + 1):
+            ws.cell(row=r, column=c).border = Border(
+                top=ince if r == r1 else None,
+                left=ince if c == c1 else None,
+                bottom=koyu if r == r2 else None,
+                right=ince if c == c2 else None,
+            )
 
 
 # --------------------------------------------------------------------------
@@ -126,23 +138,25 @@ def sayfa_hazirla(ws, sutun_genislikleri, zemin_hex=RENK["BUZ_ZEMIN"],
 
 
 def masthead(ws, son_sutun, sayfa_adi, ust_metin=URUN_ADI):
-    """Her sayfanin ustundeki iki satirlik lacivert bant.
+    """Her sayfanin ustundeki lacivert bant (satir 1-2) ve vurgu cizgisi (3).
 
-    Solda sistemin adi, sagda bulundugunuz ekran. Kullanicinin nerede
-    oldugunu bir bakista anlamasini saglar.
+    Solda sistemin adi, sagda bulundugunuz ekran. Kullanicinin nerede oldugunu
+    bir bakista anlamasini saglar. Bandin ust satiri alt satirdan kisadir:
+    metin optik olarak biraz asagida durur, uygulama baslik cubuklarindaki
+    dengeye yaklasir.
     """
-    ws.row_dimensions[1].height = OLCU["MASTHEAD_YUKSEKLIK"]
-    ws.row_dimensions[2].height = OLCU["MASTHEAD_YUKSEKLIK"]
+    ws.row_dimensions[1].height = OLCU["MASTHEAD_UST"]
+    ws.row_dimensions[2].height = OLCU["MASTHEAD_ALT"]
     blok_doldur(ws, 1, 1, 2, son_sutun, RENK["ANA_LACIVERT"])
 
     # Bant ikiye bolunur ama YARI YARIYA degil: sagdaki yalnizca kisa bir sayfa
     # adi tasir (9-10 karakter), soldaki ise urun adinin tamamini. Yariya
-    # bolunseydi uzun bir urun adi ("XJ Birimi | Proje Öneri Formu") kirpilirdi.
+    # bolunseydi uzun bir urun adi kirpilirdi.
     sag_bas = max(3, son_sutun - 2)
     sol = birlestir(ws, 1, 2, 2, sag_bas - 1)
     sol.value = ust_metin
-    sol.font = yazi(RENK["BEYAZ"], PT["SAYFA_BASLIK"], kalin=True, aile=FONT_BASLIK_AILE)
-    sol.alignment = hiza("left", "center")
+    sol.font = yazi(RENK["BEYAZ"], PT["MASTHEAD_BASLIK"], kalin=True, aile=FONT_BASLIK_AILE)
+    sol.alignment = hiza("left", "center", girinti=1)
 
     sag = birlestir(ws, 1, sag_bas, 2, son_sutun - 1)
     sag.value = buyuk(sayfa_adi)
@@ -150,43 +164,59 @@ def masthead(ws, son_sutun, sayfa_adi, ust_metin=URUN_ADI):
     sag.alignment = hiza("right", "center")
 
     # Bandin altina ince bir vurgu cizgisi
-    ws.row_dimensions[3].height = 3.0
+    ws.row_dimensions[3].height = OLCU["MASTHEAD_VURGU"]
     blok_doldur(ws, 3, 1, 3, son_sutun, RENK["KURUMSAL_MAVI"])
 
 
+def sayfa_basligi(ws, satir, c1, c2, metin, alt_metin=""):
+    """Ekranin icindeki buyuk baslik (giris ekranlari icin)."""
+    ws.row_dimensions[satir].height = 32.0
+    h = birlestir(ws, satir, c1, satir, c2)
+    h.value = metin
+    h.font = yazi(RENK["ANA_LACIVERT"], PT["EKRAN_BASLIK"], kalin=True, aile=FONT_BASLIK_AILE)
+    h.alignment = hiza("left", "center", girinti=1)
+    if alt_metin:
+        ws.row_dimensions[satir + 1].height = 20.0
+        a = birlestir(ws, satir + 1, c1, satir + 1, c2)
+        a.value = alt_metin
+        a.font = yazi(RENK["METIN_GRI"], PT["EKRAN_ALT"])
+        a.alignment = hiza("left", "center", girinti=1)
+    return h
+
+
 def bolum_basligi(ws, satir, c1, c2, metin, alt_metin=""):
-    """Numarali bolum basligi: '1 · KİMLİK BİLGİLERİ'."""
+    """Numarali bolum basligi."""
     ws.row_dimensions[satir].height = 22.0
     h = birlestir(ws, satir, c1, satir, c2)
     h.value = metin
     h.font = yazi(RENK["ANA_LACIVERT"], PT["BOLUM_BASLIK"], kalin=True, aile=FONT_BASLIK_AILE)
-    h.alignment = hiza("left", "bottom")
+    h.alignment = hiza("left", "bottom", girinti=1)
     if alt_metin:
-        ws.row_dimensions[satir + 1].height = 14.0
+        ws.row_dimensions[satir + 1].height = 15.0
         a = birlestir(ws, satir + 1, c1, satir + 1, c2)
         a.value = alt_metin
-        a.font = yazi(RENK["METIN_GRI"], PT["ETIKET"])
-        a.alignment = hiza("left", "top")
+        a.font = yazi(RENK["METIN_SOLUK"], PT["BOLUM_ALT"])
+        a.alignment = hiza("left", "top", girinti=1)
 
 
 def etiket(ws, satir, sutun, metin, zorunlu=False):
+    """Alan ustundeki mikro etiket. Buyuk harfe cevirme burada yapilir."""
     h = ws.cell(row=satir, column=sutun)
-    h.value = (metin + " *") if zorunlu else metin
+    h.value = buyuk(metin) + (" *" if zorunlu else "")
     h.font = yazi(RENK["METIN_GRI"], PT["ETIKET"], kalin=True)
     h.alignment = hiza("left", "center")
     return h
 
 
 def form_alani(ws, wb, satir, c1, c2, ad, sayfa_adi, yukseklik=None,
-               coklu_satir=False, ipucu=""):
+               coklu_satir=False):
     """Beyaz zeminli, alt kenarligi olan, KILITSIZ bir giris alani.
 
     Sayfa korumali oldugu icin yalnizca bu hucreler yazilabilir; kullanici
     tasarimi yanlislikla bozamaz. Alan adlandirilmis aralik olarak kaydedilir,
     VBA hucre adresi degil bu adi kullanir.
     """
-    if yukseklik:
-        ws.row_dimensions[satir].height = yukseklik
+    ws.row_dimensions[satir].height = yukseklik or OLCU["SATIR_ALAN"]
 
     h = birlestir(ws, satir, c1, satir, c2)
     h.fill = dolgu(RENK["BEYAZ"])
@@ -203,9 +233,6 @@ def form_alani(ws, wb, satir, c1, c2, ad, sayfa_adi, yukseklik=None,
         hh.fill = dolgu(RENK["BEYAZ"])
         hh.protection = Protection(locked=False)
 
-    if ipucu:
-        h.comment = None  # ipucu satir altinda gosterilir, acilir not kullanilmaz
-
     wb.defined_names.add(
         DefinedName(ad, attr_text=f"'{sayfa_adi}'!${get_column_letter(c1)}${satir}")
     )
@@ -213,10 +240,19 @@ def form_alani(ws, wb, satir, c1, c2, ad, sayfa_adi, yukseklik=None,
 
 
 def ipucu_satiri(ws, satir, c1, c2, metin):
-    ws.row_dimensions[satir].height = 13.0
+    ws.row_dimensions[satir].height = 14.0
     h = birlestir(ws, satir, c1, satir, c2)
     h.value = metin
-    h.font = yazi(RENK["METIN_GRI"], 8.5, italik=True)
+    h.font = yazi(RENK["METIN_SOLUK"], PT["IPUCU"], italik=True)
+    h.alignment = hiza("left", "center", girinti=1)
+    return h
+
+
+def not_satiri(ws, satir, c1, c2, metin):
+    """Ekranin altindaki kucuk aciklama satiri."""
+    h = birlestir(ws, satir, c1, satir, c2)
+    h.value = metin
+    h.font = yazi(RENK["METIN_SOLUK"], PT["NOT"], italik=True)
     h.alignment = hiza("left", "center", girinti=1)
     return h
 
@@ -225,24 +261,56 @@ def bosluk(ws, satir, yukseklik=OLCU["SATIR_BOSLUK"]):
     ws.row_dimensions[satir].height = yukseklik
 
 
-# --------------------------------------------------------------------------
-# KPI karti
-# --------------------------------------------------------------------------
-def kpi_karti(ws, wb, r1, c1, c2, etiket_metni, ad, sayfa_adi,
-              alt_metin="", sayi_bicimi="#,##0", vurgu_hex=None):
-    """Uc satirlik kart: ustte kucuk gri etiket, ortada buyuk rakam, altta not.
+def ayrac(ws, satir, c1, c2, hex_kod=RENK["CIZGI_GRI"]):
+    """1 punto yuksekliginde dolu bir satir -- yatay ayrac cizgisi.
 
-    r1 karttin ilk satiridir; kart r1..r1+2 arasini kaplar.
-    Deger hucresi adlandirilmis aralik olur, modPano oraya yazar.
+    Excel'de iki blok arasina cizgi cekmenin en temiz yolu kenarlik degil,
+    incecik bir satirin kendisini boyamaktir: kenarlik yakinlastirinca
+    kalinlasir, bu yontem her yakinlastirmada ayni kalir.
+    """
+    ws.row_dimensions[satir].height = 1.0
+    blok_doldur(ws, satir, c1, satir, c2, hex_kod)
+
+
+# --------------------------------------------------------------------------
+# Kart
+# --------------------------------------------------------------------------
+def kart(ws, r1, c1, r2, c2, vurgu_hex=None, zemin_hex=RENK["BEYAZ"]):
+    """Beyaz yuzey + hairline cerceve. Icerik bunun uzerine yazilir.
+
+    vurgu_hex verilirse sol kenar renkli ve kalin olur ("accent card"):
+    bir bloga anlam yuklemenin baslik yazmadan en ucuz yolu.
+    """
+    blok_doldur(ws, r1, c1, r2, c2, zemin_hex)
+    cerceve(ws, r1, c1, r2, c2, RENK["CIZGI_GRI"], golge_hex=RENK["GOLGE_GRI"])
+    if vurgu_hex:
+        sol = kenar(vurgu_hex, "thick")
+        for r in range(r1, r2 + 1):
+            h = ws.cell(row=r, column=c1)
+            m = h.border
+            h.border = Border(top=m.top, bottom=m.bottom, right=m.right, left=sol)
+
+
+def kpi_karti(ws, wb, r1, c1, c2, etiket_metni, ad, sayfa_adi,
+              alt_metin="", sayi_bicimi="#,##0", vurgu_hex=None, yuzey=True):
+    """Uc satirlik gosterge: ustte kucuk etiket, ortada buyuk rakam, altta not.
+
+    r1 kartin ilk satiridir; kart r1..r1+2 arasini kaplar. Deger hucresi
+    adlandirilmis aralik olur, modPano oraya yazar.
+
+    yuzey=False: beyaz zemin ve cerceve cizilmez. Pano'da kartin govdesi COM
+    asamasinda eklenen yuvarlak kose bir SEKILDIR; sekil hucrenin ustunu
+    kapattigi icin altina ikinci bir yuzey cizmek gereksizdir. Sekil bir
+    sebeple olusmazsa gosterge duz bir zemin uzerinde yine de okunur kalir.
     """
     vurgu = vurgu_hex or RENK["ANA_LACIVERT"]
 
     ws.row_dimensions[r1].height = 16.0
-    ws.row_dimensions[r1 + 1].height = 32.0
-    ws.row_dimensions[r1 + 2].height = 14.0
+    ws.row_dimensions[r1 + 1].height = 42.0
+    ws.row_dimensions[r1 + 2].height = 22.0
 
-    blok_doldur(ws, r1, c1, r1 + 2, c2, RENK["BEYAZ"])
-    cerceve(ws, r1, c1, r1 + 2, c2, RENK["CIZGI_GRI"], golge_hex=RENK["GOLGE_GRI"])
+    if yuzey:
+        kart(ws, r1, c1, r1 + 2, c2, vurgu_hex=vurgu)
 
     e = birlestir(ws, r1, c1, r1, c2)
     e.value = buyuk(etiket_metni)
@@ -257,7 +325,7 @@ def kpi_karti(ws, wb, r1, c1, c2, etiket_metni, ad, sayfa_adi,
 
     a = birlestir(ws, r1 + 2, c1, r1 + 2, c2)
     a.value = alt_metin
-    a.font = yazi(RENK["METIN_GRI"], PT["KPI_ALT"])
+    a.font = yazi(RENK["METIN_SOLUK"], PT["KPI_ALT"])
     a.alignment = hiza("left", "top", girinti=1)
 
     wb.defined_names.add(
@@ -269,59 +337,55 @@ def kpi_karti(ws, wb, r1, c1, c2, etiket_metni, ad, sayfa_adi,
 # --------------------------------------------------------------------------
 # Tablo
 # --------------------------------------------------------------------------
-def tablo_basligi(ws, satir, c1, c2, basliklar):
-    ws.row_dimensions[satir].height = 26.0
-    blok_doldur(ws, satir, c1, satir, c2, RENK["ANA_LACIVERT"])
+def tablo_basligi(ws, satir, c1, c2, basliklar, ortali=()):
+    """Acik zeminli veri tablosu basligi.
+
+    Eskiden baslik satiri dolu laciverttti. Koyu bant, tablonun kendisinden
+    daha cok dikkat cekiyordu; modern veri tablolarindaki gibi baslik artik
+    beyaz zemin uzerinde kucuk, buyuk harf ve gri. Tablonun nerede basladigini
+    satirin altindaki lacivert cizgi soyluyor.
+    """
+    ws.row_dimensions[satir].height = 28.0
+    blok_doldur(ws, satir, c1, satir, c2, RENK["BEYAZ"])
+    alt = kenar(RENK["ANA_LACIVERT"])
     for i, metin in enumerate(basliklar):
-        h = ws.cell(row=satir, column=c1 + i)
-        h.value = metin
-        h.font = yazi(RENK["BEYAZ"], PT["TABLO_BASLIK"], kalin=True)
-        h.alignment = hiza("center", "center", kaydir=True)
-        h.border = Border(right=kenar(RENK["KURUMSAL_MAVI"]))
+        c = c1 + i
+        h = ws.cell(row=satir, column=c)
+        h.value = buyuk(metin)
+        h.font = yazi(RENK["METIN_GRI"], PT["TABLO_BASLIK"], kalin=True)
+        h.alignment = hiza("center" if c in ortali else "left", "center",
+                           kaydir=True, girinti=0 if c in ortali else 1)
+    for c in range(c1, c2 + 1):
+        ws.cell(row=satir, column=c).border = Border(bottom=alt)
 
 
-def tablo_govde_stili(ws, r1, r2, c1, c2, serit=True):
-    """Tablo govdesine ince cizgi ve tek/cift satir seridi uygular."""
-    ince = kenar(RENK["CIZGI_GRI"])
+def tablo_govde_stili(ws, r1, r2, c1, c2, serit=False, ortali=()):
+    """Tablo govdesi: beyaz yuzey, satir altinda hairline, dikey cizgi yok.
+
+    Zebra serit varsayilan olarak kapalidir. Iki renkli satirlar, satir sayisi
+    az oldugunda gorsel gurultu yaratiyordu; ayirma isini satir altindaki
+    incecik cizgi zaten yapiyor.
+    """
+    ince = kenar(RENK["CIZGI_INCE"])
     for r in range(r1, r2 + 1):
-        ws.row_dimensions[r].height = OLCU["SATIR_NORMAL"]
+        ws.row_dimensions[r].height = OLCU["SATIR_TABLO"]
         zemin = RENK["BEYAZ"]
         if serit and (r - r1) % 2 == 1:
             zemin = RENK["BUZ_ZEMIN"]
         for c in range(c1, c2 + 1):
             h = ws.cell(row=r, column=c)
             h.fill = dolgu(zemin)
-            h.border = Border(bottom=ince, right=ince)
+            h.border = Border(bottom=ince)
             h.font = yazi(RENK["METIN_KOYU"], PT["GOVDE"])
-            h.alignment = hiza("left", "center", girinti=1)
+            h.alignment = hiza("center" if c in ortali else "left", "center",
+                               girinti=0 if c in ortali else 1)
 
 
-def bilgi_kutusu(ws, r1, c1, r2, c2, metin, zemin=RENK["ACIK_MAVI"],
-                 yazi_hex=RENK["ANA_LACIVERT"]):
-    blok_doldur(ws, r1, c1, r2, c2, zemin)
-    cerceve(ws, r1, c1, r2, c2, RENK["CIZGI_GRI"])
-    h = birlestir(ws, r1, c1, r2, c2)
-    h.value = metin
-    h.font = yazi(yazi_hex, PT["GOVDE"])
-    h.alignment = hiza("left", "center", kaydir=True, girinti=1)
-    return h
-
-
-def dugme_yeri(ws, satir, sutun, yukseklik=34.0):
-    """Dugme sekli icin yer acar. Sekiller COM asamasinda eklenir; openpyxl
-    yuvarlatilmis dikdortgen + OnAction bagi kuramaz."""
-    ws.row_dimensions[satir].height = yukseklik
-    return adres(satir, sutun)
-
-
-# --------------------------------------------------------------------------
-# Kosullu bicimlendirme -- durum ve oncelik rozetleri
-# --------------------------------------------------------------------------
 def durum_kosullu_bicim(ws, hucre_araligi):
-    """Durum sutununa her durum icin bir kural ekler.
+    """Durum sutununa sekiz durumun rozet renklerini kosullu bicim olarak kurar.
 
-    Kosullu bicimlendirme tercih edilir cunku VBA tabloyu yeniden kurdugunda
-    renkleri ayrica boyamasi gerekmez; kural sayfada kalicidir.
+    Kosullu bicim, VBA tabloyu her yeniden kurdugunda renkleri tekrar boyamak
+    zorunda kalmasini onler.
     """
     from openpyxl.formatting.rule import CellIsRule
 
@@ -329,37 +393,48 @@ def durum_kosullu_bicim(ws, hucre_araligi):
         ws.conditional_formatting.add(
             hucre_araligi,
             CellIsRule(operator="equal", formula=[f'"{durum}"'],
-                       fill=dolgu(zemin), font=yazi(yazi_renk, PT["GOVDE"], kalin=True)),
-        )
-
-
-def oncelik_kosullu_bicim(ws, hucre_araligi):
-    from openpyxl.formatting.rule import CellIsRule
-
-    for sinif, (zemin, yazi_renk) in ONCELIK_RENK.items():
-        ws.conditional_formatting.add(
-            hucre_araligi,
-            CellIsRule(operator="equal", formula=[f'"{sinif}"'],
-                       fill=dolgu(zemin), font=yazi(yazi_renk, PT["GOVDE"], kalin=True)),
+                       fill=dolgu(zemin),
+                       font=yazi(yazi_renk, PT["GOVDE"], kalin=True)),
         )
 
 
 # --------------------------------------------------------------------------
-# Listeler sayfasi (veri dogrulama kaynagi)
+# Bilgi kutusu
 # --------------------------------------------------------------------------
-def listeler_sayfasi_kur(wb, listeler: dict):
-    """Gizli 'Listeler' sayfasina her listeyi bir sutun olarak yazar ve
-    her biri icin adlandirilmis aralik olusturur (lst_durum gibi)."""
+def bilgi_kutusu(ws, r1, c1, r2, c2, metin, zemin=RENK["ACIK_MAVI"],
+                 yazi_hex=RENK["ANA_LACIVERT"], vurgu=RENK["KURUMSAL_MAVI"]):
+    """Sol kenarinda renkli serit olan aciklama blogu (web'deki "callout").
+
+    Cerceve yerine tek bir dikey serit kullanilir: goz metne gider, kutuya
+    degil.
+    """
+    blok_doldur(ws, r1, c1, r2, c2, zemin)
+    serit = kenar(vurgu, "thick")
+    for r in range(r1, r2 + 1):
+        ws.cell(row=r, column=c1).border = Border(left=serit)
+
+    h = birlestir(ws, r1, c1, r2, c2)
+    h.value = metin
+    h.font = yazi(yazi_hex, PT["GOVDE"])
+    h.alignment = hiza("left", "center", kaydir=True, girinti=1)
+    return h
+
+
+# --------------------------------------------------------------------------
+# Listeler sayfasi
+# --------------------------------------------------------------------------
+def listeler_sayfasi_kur(wb, listeler):
+    """Veri dogrulama listelerini tasiyan gizli sayfa."""
     ws = wb.create_sheet("Listeler")
     for i, (ad, degerler) in enumerate(listeler.items(), start=1):
-        sutun = get_column_letter(i)
-        ws.cell(row=1, column=i, value=ad).font = yazi(RENK["METIN_GRI"], 9, kalin=True)
+        harf = get_column_letter(i)
+        b = ws.cell(row=1, column=i, value=ad)
+        b.font = yazi(RENK["METIN_GRI"], PT["NOT"], kalin=True)
         for j, deger in enumerate(degerler, start=2):
             ws.cell(row=j, column=i, value=deger)
-        ws.column_dimensions[sutun].width = 24
-        wb.defined_names.add(
-            DefinedName(f"lst_{ad}",
-                        attr_text=f"Listeler!${sutun}$2:${sutun}${len(degerler) + 1}")
-        )
+        ws.column_dimensions[harf].width = 24
+        wb.defined_names.add(DefinedName(
+            f"lst_{ad}",
+            attr_text=f"Listeler!${harf}$2:${harf}${len(degerler) + 1}"))
     ws.sheet_state = "hidden"
     return ws
