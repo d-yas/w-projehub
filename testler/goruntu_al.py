@@ -1,0 +1,131 @@
+# -*- coding: utf-8 -*-
+r"""Ekranlarin PNG goruntusunu alir -- tasarim gozden gecirmesi icin.
+
+Otomatik testler bir ekranin DOGRU calistigini gosterir, IYI GORUNDUGUNU
+gosteremez. Bu arac her sayfayi oldugu gibi disa aktarir; boylece hizalama,
+renk, kart ve dugme yerlesimi dosyayi elle acmadan gozden gecirilebilir.
+
+    python testler\goruntu_al.py [hedef_klasor]
+"""
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import yardimci as y
+
+XL_PDF = 0
+DIKEY, YATAY = 1, 2
+
+# (kitap, sayfa, aralik, yon) -- aralik ekranin tasarlanmis sinirlarini kapsar
+GORUNUMLER = [
+    ("oneri", "Giriş", "A1:G22", DIKEY),
+    ("oneri", "Öneri Formu", "A1:G36", DIKEY),
+    ("yonetim", "Giriş", "A1:G13", DIKEY),
+    ("yonetim", "Konsol", "A1:L20", YATAY),
+    ("yonetim", "Değerlendirme", "A1:G48", DIKEY),
+    ("yonetim", "Pano", "A1:J51", DIKEY),
+    ("yonetim", "Rapor", "A1:F17", DIKEY),
+]
+
+
+def _sayfa_disaver(wb, sayfa_adi, aralik, yon, hedef):
+    """Bir ekrani PDF olarak disa aktarir.
+
+    Ekran goruntusu (CopyPicture) pencerenin gercekten cizilmis olmasini
+    ister ve gorunmez/otomasyon oturumlarinda basarisiz olur. PDF disa
+    aktarma pencereye bagli degildir, sekilleri (dugmeleri) ve grafikleri
+    icerir, ustelik vektoreldir.
+    """
+    ws = wb.Worksheets(sayfa_adi)
+    eski = ws.Visible
+    ws.Visible = -1
+    try:
+        ws.PageSetup.PrintArea = aralik
+        ws.PageSetup.Orientation = yon
+        ws.PageSetup.Zoom = False
+        ws.PageSetup.FitToPagesWide = 1
+        ws.PageSetup.FitToPagesTall = False
+        for kenar in ("LeftMargin", "RightMargin", "TopMargin", "BottomMargin"):
+            setattr(ws.PageSetup, kenar, 14)          # ~0,5 cm
+        ws.PageSetup.CenterHorizontally = True
+        ws.ExportAsFixedFormat(XL_PDF, hedef, 0, True, False)
+    finally:
+        ws.Visible = eski
+    return hedef
+
+
+def calistir(hedef_klasor):
+    os.makedirs(hedef_klasor, exist_ok=True)
+    uretilen = []
+
+    with y.ortam() as o:
+        # Tek bir gorunur Excel oturumu: goruntu alma ekrandan gectigi icin
+        # pencerenin acik olmasi gerekir.
+        with y.excel(gorunur=True) as app:
+            # Ornek veri: bos ekranlar tasarimi degerlendirmeye yetmez.
+            with y.kitap(app, o.oneri_kitap) as wb:
+                ornekler = [
+                    ("Ayşe Çağlar", "10045",
+                     "Gişede müşteri sırası yoğun saatlerde 20 dakikayı buluyor.",
+                     "Sıra yönetimi iyileştirmesi",
+                     "Ön kontrol ekranı eklensin.", "İşlem başına 4 dakika"),
+                    ("Mehmet Öz", "10046",
+                     "Aynı evrak iki ayrı adımda taranıyor.", "Tek tarama kuralı",
+                     "Tarama adımları birleştirilsin.", "Günde 1 saat"),
+                    ("Zeynep Şahin", "10047",
+                     "Onay için üç ayrı imza isteniyor.", "İmza sayısı azaltılsın",
+                     "İki imza yeterli olsun.", "Dosya başına 1 gün"),
+                    ("Can Yılmaz", "10048",
+                     "Talepler tek kuyrukta birikiyor.", "Talep önceliklendirme",
+                     "Kuyruk ikiye ayrılsın.", "Haftada 6 saat"),
+                ]
+                numaralar = [y.calistir(app, wb, "modGonderim.TestGonderimi", *e)
+                             for e in ornekler]
+
+            acik = {
+                "oneri": app.Workbooks.Open(os.path.abspath(o.oneri_kitap)),
+                "yonetim": app.Workbooks.Open(os.path.abspath(o.yonetim_kitap)),
+            }
+            wb = acik["yonetim"]
+
+            y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
+                       numaralar[0], "Pilot Uygulamada", 4, 2,
+                       120.0, 30000.0, "Şube müdürüyle görüşüldü.")
+            y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
+                       numaralar[1], "Standartlaştırıldı",
+                       5, 3, 200.0, 50000.0, "Tüm operasyona yaygınlaştırıldı.")
+            y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
+                       numaralar[2], "Reddedildi", 2, 5,
+                       0.0, 0.0, "Mevzuat üç imzayı zorunlu kılıyor.")
+            y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
+                       numaralar[3], "Değerlendirmede",
+                       3, 4, 0.0, 0.0, "İnceleniyor.")
+
+            # Kullanicinin bastigi dugmenin tam yolu: ozet satiri da dolsun.
+            y.calistir(app, wb, "modKonsolide.OnerileriYenile")
+            app.EnableEvents = False
+            y.calistir(app, wb, "modDegerlendirme.OneriyiAc", numaralar[0])
+            wb.Worksheets("Rapor").Range("rpr_donem").Value = "Tümü"
+
+            for kitap_anahtar, sayfa, aralik, yon in GORUNUMLER:
+                ad = f"{kitap_anahtar}-{sayfa.replace(' ', '-')}.pdf"
+                hedef = os.path.join(hedef_klasor, ad)
+                _sayfa_disaver(acik[kitap_anahtar], sayfa, aralik, yon, hedef)
+                uretilen.append(hedef)
+                print(f"  ✓ {ad}")
+
+            for k in acik.values():
+                k.Close(SaveChanges=False)
+
+    return uretilen
+
+
+if __name__ == "__main__":
+    klasor = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "goruntuler")
+    print("Ekran görüntüleri alınıyor…")
+    for y_ in calistir(klasor):
+        pass
+    print(f"\nKlasör: {klasor}")

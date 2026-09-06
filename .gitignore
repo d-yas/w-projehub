@@ -1,0 +1,10 @@
+# Üretilen çalışma kitapları -- veri değil, `python kur.py` ile her zaman
+# yeniden üretilebilir. Kaynak, kaynak\ klasöründeki metin dosyalarıdır.
+cikti/
+
+# Tasarım gözden geçirmesi için dışa aktarılan ekran PDF'leri
+goruntuler/
+
+__pycache__/
+*.pyc
+~$*.xls*

@@ -1,0 +1,274 @@
+# Kurulum
+
+Bu belge sistemin bir ağ paylaşımına nasıl kurulacağını anlatır.
+Neden böyle tasarlandığı `TASARIM-VE-GEREKCE.md`'de, genel bakış
+`OKU-BENI.md`'dedir.
+
+---
+
+## 1. Çalışma kitaplarını üret
+
+Üretim yalnızca **bir kez, bir geliştirici makinesinde** yapılır. Kullanıcı
+bilgisayarlarında Python'a da bu adıma da gerek yoktur.
+
+Gerekenler: Windows, masaüstü Excel (Microsoft 365 / 2019+), Python 3.9+.
+
+```
+pip install openpyxl pywin32
+python kur.py
+```
+
+Çıktı:
+
+```
+cikti\KaizenOneri.xlsm
+cikti\yonetim\KaizenYonetim.xlsm
+```
+
+`kur.py` Excel'in **“VBA proje nesne modeline erişime güven”** ayarını geçici
+olarak açar ve işi bitince — hata alsa bile — eski değerine döndürür. Bu ayar
+kurum ilkesiyle kilitliyse üretim o makinede yapılamaz; başka bir makinede
+üretip `.xlsm` dosyalarını kopyalamak yeterlidir.
+
+> **Uyarı:** Üretilen dosyaları OneDrive ile eşlenmiş bir klasörden
+> çalıştırmayın. Eşlenmiş klasörlerde Excel dosyanın konumunu disk yolu yerine
+> `https://...` adresi olarak bildirir; kod bunu çevirir ama Excel'in Güvenilir
+> Konumlar listesi disk yollarına göre çalıştığı için güven ayarı beklendiği
+> gibi davranmayabilir. Gerçek kurulum bir UNC paylaşımında olacağı için bu
+> durum üretimde oluşmaz.
+
+---
+
+## 2. Klasör yapısını kur
+
+Ağ paylaşımında şu yapıyı oluşturun (örnek: `\\sunucu\paylasim\kaizen`):
+
+```
+kaizen\
+├── KaizenOneri.xlsm          ← cikti\KaizenOneri.xlsm
+└── yonetim\
+    ├── KaizenYonetim.xlsm    ← cikti\yonetim\KaizenYonetim.xlsm
+    ├── oneriler\             ← gönderimlerin TEK ve kalıcı yeri (madde 3)
+    ├── degerlendirme\
+    └── rapor\
+```
+
+Personelin `kaizen\` altında gördüğü tek şey çalışma kitabı ve `yonetim\`
+klasörünün **adıdır**; içine bakamaz.
+
+**Ayrı bir “gelen kutusu” yoktur.** Personel doğrudan `yonetim\oneriler\`
+altına yazar; dosya baştan itibaren kalıcı yerindedir ve sonradan hiçbir yere
+taşınmaz. Yazabilir ama içini göremez — nasıl olduğu madde 3'te.
+
+**Yıl klasörlerini elle açmayın.** `oneriler\2026\` ve benzerleri ilk
+gönderimde kendiliğinden oluşur ve izinleri `oneriler\`den miras alır. Elle
+açarsanız izin mirası bozulabilir.
+
+Kitaplar konumlarını **klasör yapısından** bulur: `yonetim` alt klasörü hangi
+seviyedeyse kök orasıdır. Dosyaları yeniden adlandırabilirsiniz; yapıyı
+bozmayın.
+
+---
+
+## 3. NTFS izinleri — asıl güvenlik sınırı budur
+
+VBA içindeki şifreler gerçek bir sınır değildir (madde 6). Erişimi belirleyen
+şey klasör izinleridir.
+
+| Klasör / dosya | Kimler | İzin |
+|---|---|---|
+| Klasör / dosya | Tüm personel | Kaizen ekibi |
+|---|---|---|
+| `kaizen\` | Okuma + Çalıştırma | Tam denetim |
+| `kaizen\KaizenOneri.xlsm` | **Salt okunur** | Tam denetim |
+| `kaizen\yonetim\` | **Yalnızca geçiş** (listeleme yok) | Tam denetim |
+| `kaizen\yonetim\oneriler\` | **Bırakma kutusu** — aşağıya bakın | Tam denetim |
+| `yonetim\degerlendirme\`, `rapor\` | Hiçbir hak | Tam denetim |
+
+### `yonetim\oneriler\` — bırakma kutusu
+
+Bu klasör bir posta kutusu gibi çalışmalıdır: **herkes içine atabilir, kimse
+içini göremez.** Personele yalnızca *dosya oluştur* ve *klasör oluştur* hakkı
+verilir; *listeleme/okuma* ve *silme* hakkı **verilmez**. Sonuç:
+
+- Kimse başkasının önerisini okuyamaz.
+- Kimse klasörde hangi önerilerin olduğunu göremez.
+- Kimse bir öneriyi silemez.
+- Herkes kendi önerisini bırakabilir.
+
+**Komutların sırası önemlidir: `yonetim\` EN SON kısıtlanır.** Ters sırada
+yaparsanız izin komutlarının kendisi çalışamaz hale gelir ve klasörler
+sessizce erişilemez kalır (`Personel` ve `Kaizen-Ekibi` yerine kendi grup
+adlarınızı yazın):
+
+```
+set K=\\sunucu\paylasim\kaizen
+
+REM 1) Önce bırakma kutusu
+icacls "%K%\yonetim\oneriler" /inheritance:r
+icacls "%K%\yonetim\oneriler" /grant "ALANADI\Kaizen-Ekibi:(OI)(CI)(F)"
+icacls "%K%\yonetim\oneriler" /grant "ALANADI\Personel:(OI)(CI)(WD,AD,X,RA,REA,WA,WEA,RC)"
+
+REM 2) Sonra yönetim tarafının geri kalanı -- personele hiçbir hak yok
+for %%D in (degerlendirme rapor) do (
+  icacls "%K%\yonetim\%%D" /inheritance:r
+  icacls "%K%\yonetim\%%D" /grant "ALANADI\Kaizen-Ekibi:(OI)(CI)(F)"
+)
+icacls "%K%\yonetim\KaizenYonetim.xlsm" /inheritance:r
+icacls "%K%\yonetim\KaizenYonetim.xlsm" /grant "ALANADI\Kaizen-Ekibi:(F)"
+
+REM 3) EN SON: yonetim\ -- personele yalnızca GEÇİŞ, miras bayrağı YOK
+icacls "%K%\yonetim" /inheritance:r
+icacls "%K%\yonetim" /grant "ALANADI\Kaizen-Ekibi:(OI)(CI)(F)"
+icacls "%K%\yonetim" /grant "ALANADI\Personel:(X)"
+```
+
+Kısaltmalar: `WD` dosya oluştur/veri yaz, `AD` klasör oluştur/veri ekle,
+`X` klasörde gezin, `RA`/`REA` öznitelik oku, `WA`/`WEA` öznitelik yaz,
+`RC` izinleri oku. **Bilerek verilmeyenler:** `RD` (listele/oku), `DE` (sil),
+`DC` (alt öğe sil).
+
+Personele verilen `(X)` hakkında **miras bayrağı yoktur** — yani yalnızca
+`yonetim\` klasörünün kendisine uygulanır, kardeş klasörlere sızmaz. Bırakma
+kutusundaki izinler ise `(OI)(CI)` ile alt klasörlere ve dosyalara miras
+kalır; `/t` ile zorla uygulamayın, mevcut alt klasörlerin izinlerini
+boşaltabilir.
+
+> Sistem bu kısıtlar altında **çalışacak şekilde tasarlandı ve sınandı.**
+> `python testler\test_izinler.py` klasörleri gerçekten bu izinlerle kilitler,
+> gerçek gönderim makrosunu çalıştırır ve şunları tek tek doğrular:
+> yönetim klasörü listelenemiyor, değerlendirme notları okunamıyor ve
+> üzerlerine yazılamıyor, yönetim kitabı okunamıyor, bırakma kutusu
+> listelenemiyor, bırakılan öneri okunamıyor ve silinemiyor — **ama gönderim
+> çalışıyor.**
+>
+> Kayıt yazarken `.tmp` + yeniden adlandırma kullanılmamasının nedeni de
+> budur: yeniden adlandırma **silme** yetkisi ister ve bu izin modeliyle
+> bağdaşmaz (bkz. `TASARIM-VE-GEREKCE.md`, madde 4).
+
+### `KaizenOneri.xlsm` salt okunur olmalıdır
+
+Aksi halde dosyayı ilk açan kullanıcı kilitler ve ikinci kullanıcı
+“kullanımda” uyarısı alır. Salt okunur açılan bir kitap bellekte
+düzenlenebilir: form doldurulur, makro ortak klasöre yazar; yalnızca kitabın
+kendisi kaydedilemez — zaten istenen budur.
+
+### Bir de gizleme (isteğe bağlı)
+
+`attrib +h "\\sunucu\paylasim\kaizen\yonetim"` klasörü gözden uzak tutar.
+Bu bir güvenlik sınırı **değildir** — asıl koruma yukarıdaki izinlerdir —
+ama klasörün merak uyandırmasını önler.
+
+---
+
+## 4. Makro izni — BT ile konuşulması gerekenler
+
+Sistemin tek gerçek gereksinimi makroların çalışabilmesidir. Kuruma sorulacak
+iki soru:
+
+1. **Makrolar kullanıcı onayıyla çalışabiliyor mu?** Grup ilkesiyle tümden
+   kapatılmışsa bu sürüm hiç açılmaz.
+2. **Ağ paylaşımı “Güvenilir Konum” olarak tanımlanabilir mi?**
+   - Tanımlanırsa kullanıcı hiçbir uyarı görmez.
+   - Tanımlanmazsa sistem yine çalışır; kullanıcı her açılışta
+     *İçeriği Etkinleştir* der.
+
+Ek olarak **MOTW (Mark of the Web)**: Ağdan gelen dosyalar bazı yapılandırmalarda
+“Korumalı Görünüm”de açılır ve makrolar tümden engellenir. Bunu da Güvenilir
+Konum tanımı çözer. Paylaşımın Intranet bölgesinde olması gerekir.
+
+Güvenilir Konum tanımı: *Dosya → Seçenekler → Güven Merkezi → Güven Merkezi
+Ayarları → Güvenilir Konumlar → Yeni konum ekle* → `\\sunucu\paylasim\kaizen`,
+“Bu konumun alt klasörlerine de güven” işaretli. (Ağ konumlarına izin vermek
+için “Ağdaki güvenilir konumlara izin ver” kutusu da açılmalıdır.)
+
+---
+
+## 5. Şifreleri değiştir
+
+Varsayılan ekran şifreleri `kaynak\vba\modAyar.bas` başındadır:
+
+```vba
+Public Const SIFRE_PERSONEL As String = "kaizen"
+Public Const SIFRE_YONETIM As String = "kaizen-yonetim"
+```
+
+Değiştirip `python kur.py` çalıştırın.
+
+Ekranların üstündeki başlık `kaynak\tasarim.py` içindeki `URUN_ADI`
+sabitindedir. Öneri numarasının öneki (`ON`) `modAyar.bas` içindeki
+`ONEK_ONERI_NO` sabitidir. Durum listesini değiştirecekseniz `modModel.bas`
+içindeki `Durumlar()` ile `kur.py` içindeki `listeler()` işlevini birlikte
+düzenleyin — `python testler\test_uretim.py` ikisinin aynı kaldığını denetler.
+
+---
+
+## 6. Güvenlik — ne gerçek, ne değil
+
+| Katman | Gerçek sınır mı | Not |
+|---|---|---|
+| Personel şifresi | **Hayır** | VBA içinde düz metin |
+| Yönetim şifresi | **Hayır** | VBA içinde düz metin |
+| Sayfa/kitap koruması | **Hayır** | Kazara bozmayı önler |
+| NTFS klasör izinleri | **Evet** | Asıl erişim denetimi |
+| Rapor parolası | **Evet** | Excel'in ECMA-376 AES şifrelemesi |
+
+Ekran şifrelerinin işlevi “yanlış ekrana yanlışlıkla girmeyi” önlemektir.
+Rapor parolası koda gömülü değildir: rapor üretilirken sorulur ve hiçbir yere
+kaydedilmez. Bu yüzden kitabı ele geçiren biri raporu açamaz — ama parolayı
+kaybederseniz rapor da kurtarılamaz.
+
+---
+
+## 7. Elle uçtan uca kontrol — atlanmamalı
+
+`python testler\tum_testler.py` 145'ten fazla kontrol çalıştırır ve gerçek
+Excel'de gerçek makroları kullanır. **Ancak göremediği bir şey vardır:**
+makrolar COM üzerinden çağrılır; bu yol Excel'in makro güvenlik ayarını,
+“İçeriği Etkinleştir” uyarısını ve düğmelere basmayı hiç görmez.
+
+Kurulumdan sonra aşağıdaki listeyi **bir kez** elle uygulayın:
+
+- [ ] `KaizenOneri.xlsm`'i ağ yolundan çift tıklayarak açın (kendi
+      bilgisayarınıza kopyalamadan).
+- [ ] Güvenlik uyarısı çıkarsa *İçeriği Etkinleştir*'e basın; çıkmıyorsa
+      Güvenilir Konum tanımı çalışıyor demektir.
+- [ ] *Sisteme Gir* → şifre → form açılıyor mu?
+- [ ] Alanları boş bırakıp *Öneriyi Gönder* → uyarı geliyor mu?
+- [ ] Formu doldurup gönderin → öneri numarası görünüyor, form temizleniyor,
+      `yonetim\oneriler\<yıl>\` altında dosya oluşuyor mu? (Kontrolü Kaizen
+      ekibi hesabıyla yapın; personel hesabı klasörü göremez — istenen budur.)
+- [ ] Personel hesabıyla `yonetim\` klasörünü açmayı deneyin → **erişim
+      engellenmeli.**
+- [ ] **İkinci bir kullanıcıyla aynı anda açın** ve ikisi de gönderim yapsın →
+      iki ayrı dosya oluşuyor, ikisi de “kullanımda” uyarısı almıyor mu?
+- [ ] `yonetim\KaizenYonetim.xlsm`'i açın → *Konsola Gir* → *Önerileri Yenile*
+      → gönderimler listede mi?
+- [ ] Bir satıra çift tıklayın → değerlendirme ekranı doluyor mu?
+- [ ] Durum, etki, efor girip *Değerlendirmeyi Kaydet* → geçmişe ekleniyor,
+      konsolda durum değişiyor mu?
+- [ ] *Pano* → göstergeler ve grafikler doluyor mu?
+- [ ] *Rapor* → *Parolalı Rapor Üret* → parola sorup dosya üretiyor mu?
+      Üretilen dosya parolasız açılmıyor mu?
+
+Bu liste tamamlanmadan kurulum “bitti” sayılmaz.
+
+---
+
+## 8. Sürdürme
+
+| İş | Nasıl |
+|---|---|
+| Şifre / başlık / durum listesi değişikliği | `kaynak\vba\*.bas` ya da `kaynak\tasarim.py` düzenle, `python kur.py` |
+| Ekran veya alan değişikliği | `kaynak\uret_*.py` düzenle, `python kur.py` |
+| Doğrulama | `python testler\tum_testler.py` + madde 7'deki elle liste |
+| Tasarım gözden geçirme | `python testler\goruntu_al.py` → ekranların PDF'i |
+| **Yedekleme** | **`yonetim\` klasörünün tamamı** (öneriler ve değerlendirmeler orada) |
+
+Yedekleme kuralı önemlidir: çalışma kitapları **üretilebilir** dosyalardır,
+veri değildir. Verinin tamamı o iki klasördeki düz metin dosyalarındadır.
+`.xlsm` dosyaları her zaman `python kur.py` ile yeniden üretilebilir.
+
+**Ölçek:** `oneriler\` her yenilemede baştan taranır. Yıl alt klasörleri sayesinde
+birkaç bin dosyaya kadar sorunsuzdur. On binlere çıkılırsa eski yıl klasörlerini
+arşive taşımak yeterlidir; sistem kalan yılları okumaya devam eder.
