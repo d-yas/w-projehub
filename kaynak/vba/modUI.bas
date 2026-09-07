@@ -106,6 +106,7 @@ Public Sub SayfaGoster(ByVal ad As String, Optional ByVal etkinlestir As Boolean
         ThisWorkbook.Worksheets(ad).Activate
         ThisWorkbook.Worksheets(ad).Range("A1").Select
         On Error GoTo 0
+        YenidenCiz
     End If
 End Sub
 
@@ -252,6 +253,44 @@ Public Sub HizliModKapa()
     Application.Calculation = xlCalculationAutomatic
     Application.EnableEvents = True
     Application.ScreenUpdating = True
+    On Error GoTo 0
+End Sub
+
+' ---------------------------------------------------------------------------
+'  YenidenCiz -- etkin pencereyi bastan boyatir.
+'
+'  Liste, kullanici BASKA bir ekrandayken ve ScreenUpdating kapaliyken
+'  yeniden yazilir (modKonsolide.ListeyiCiz, modDegerlendirme.DegerlendirmeKaydet
+'  icinden). Excel o sirada sayfanin ekran goruntusunu onbellekte tutar ve
+'  sayfaya donuldugunde yalnizca gecersiz saydigi bolgeyi boyar.
+'
+'  Liste'de bolmeler dondurulmustur (C9). SayfaGoster donuste A1'i secer; A1
+'  DONDURULMUS bolmededir, veri satirlari ise digerinde. Veri bolmesi gecersiz
+'  sayilmazsa ESKI satirlarin yazisi ekranda kalir ve yeni satirlar ustune
+'  cizilir -- satirlar ic ice gecmis gorunur.
+'
+'  Her bolmeyi bir satir kaydirip geri almak o bolmeyi gecersiz kilar. Gorunum
+'  degismez: kaydirma konumu okunup aynen geri yazilir.
+'
+'  ScreenUpdating cagiranin biraktigi degere DONDURULUR, kosulsuz acilmaz:
+'  OturumAc bu yordami ekran kapaliyken cagirir ve orada erken acmak sayfa
+'  gizleme/gosterme trafigini kullaniciya seyrettirirdi.
+'
+'  Yalnizca gorunum icindir; penceresi olmayan bir oturumda (otomasyon,
+'  testler) hata verebilir ve bu hata isin kendisini durdurmamalidir.
+' ---------------------------------------------------------------------------
+Public Sub YenidenCiz()
+    Dim bolme As Object, satir As Long, eskiEkran As Boolean
+
+    On Error Resume Next
+    eskiEkran = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+    For Each bolme In ActiveWindow.Panes
+        satir = bolme.ScrollRow
+        bolme.ScrollRow = satir + 1
+        bolme.ScrollRow = satir
+    Next bolme
+    Application.ScreenUpdating = eskiEkran
     On Error GoTo 0
 End Sub
 
