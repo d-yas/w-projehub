@@ -2,16 +2,21 @@ Attribute VB_Name = "modAyar"
 Option Explicit
 
 ' ============================================================================
-'  modAyar -- klasor yollari, ekran sifreleri, sema surumu
+'  modAyar -- dosya yollari, ekran sifreleri, depo parolasi, sema surumu
 '
-'  Sifreler burada duz metin olarak durur ve GERCEK bir guvenlik siniri
-'  DEGILDIR. Amaclari yalnizca "yanlis ekrana yanlislikla girmeyi" onlemektir.
-'  Asil erisim denetimi ag klasorunun NTFS izinleridir (bkz. KURULUM.md).
+'  EKRAN sifreleri (SIFRE_PERSONEL, SIFRE_YONETIM) yalnizca "yanlis ekrana
+'  yanlislikla girmeyi" onler. SIFRE_KORUMA kazara hucre bozmayi onler.
+'
+'  SIFRE_DOSYA baskadir: yonetim kitabinin ACILIS parolasidir ve artik
+'  gizliligin ASIL siniridir. Personel dosyayi kopyalayabilir ama parolasiz
+'  acamaz. Tehdit modeli SIRADAN PERSONELDIR: parola bu kaynakta ve uretilen
+'  kitaplarin VBA'sinda duz durur, yani VBA'yi acmayi bilen biri onu okur.
+'  Bu bilincli bir sinirdir (bkz. TASARIM-VE-GEREKCE.md madde 8).
 ' ============================================================================
 
-Public Const SEMA_SURUMU As String = "3"
+Public Const SEMA_SURUMU As String = "4"
 
-' Oneri numarasinin oneki: PRJ-26A7K
+' Oneri numarasinin oneki: PRJ-2026-0001
 Public Const ONEK_ONERI_NO As String = "PRJ"
 
 ' --- Ekran sifreleri (gercek guvenlik siniri degil) -----------------------
@@ -22,22 +27,16 @@ Public Const SIFRE_YONETIM As String = "proje-yonetim"
 ' --- Sayfa/kitap koruma parolasi (kazara bozmayi onler) -------------------
 Public Const SIFRE_KORUMA As String = "po-koruma"
 
-' --- Klasor adlari --------------------------------------------------------
+' --- Yonetim kitabinin acilis parolasi (veri deposunun kapisi) ------------
+Public Const SIFRE_DOSYA As String = "proje-depo"
+
+' --- Klasor ve dosya adlari ----------------------------------------------
 Public Const KLASOR_YONETIM As String = "yonetim"
-Public Const KLASOR_ONERILER As String = "oneriler"
-Public Const KLASOR_DEGERLENDIRME As String = "degerlendirme"
+Public Const KLASOR_YEDEK As String = "yedek"
+Public Const DOSYA_YONETIM As String = "ProjeYonetim.xlsm"
 
-' --- Dosya bicimi ---------------------------------------------------------
-Public Const UZANTI_KAYIT As String = ".txt"
-
-' Kayit dosyasinin SON satiri. Okuyucu bu satiri gormezse dosyayi yarim
-' yazilmis sayar ve yok sayar. Yazma sirasinda bir kesinti olursa (ag koptu,
-' Excel kapandi) yarim kalan dosya asla gecerli bir kayit gibi okunmaz.
-Public Const ALAN_SON As String = "kayit_sonu"
-
-' Cok satirli alanlarda satir sonu yerine yazilan belirtec.
-' Boylece her kayit alani dosyada tam olarak bir satir kaplar.
-Public Const SATIR_BELIRTEC As String = "<|>"
+' Kac gunluk yedek kopya saklanir (yenisi eklenince en eskisi silinir).
+Public Const YEDEK_ADET As Long = 7
 
 
 ' ---------------------------------------------------------------------------
@@ -48,12 +47,10 @@ Public Const SATIR_BELIRTEC As String = "<|>"
 '    projeoneri\yonetim\ProjeYonetim.xlsm  -> kok = bir ust klasor
 '
 '  Karar kitap adina degil klasor yapisina bakilarak verilir: "yonetim" alt
-'  klasoru hangi seviyede varsa kok orasidir. Boylece kitap yeniden
-'  adlandirilsa bile sistem calismaya devam eder.
+'  klasoru hangi seviyede varsa kok orasidir.
 '
-'  Isaret olarak "yonetim" kullanilir: personel bu klasorun ICINI goremez ama
-'  "projeoneri\" klasorunu okuyabildigi icin orada "yonetim" adli bir klasor
-'  oldugunu gorebilir. Ic klasorler isaret olarak kullanilamaz.
+'  Isaret olarak "yonetim" kullanilir: personel bu klasoru gorebilir, icindeki
+'  kitap ise parolalidir.
 ' ---------------------------------------------------------------------------
 Public Function KokKlasor() As String
     Dim kendi As String, ust As String
@@ -96,33 +93,27 @@ Public Function YonetimKlasor() As String
 End Function
 
 ' ---------------------------------------------------------------------------
-'  Oneriler -- gonderimlerin TEK ve KALICI yeri: "yonetim\oneriler\<yil>\"
+'  YonetimKitapYolu -- VERI DEPOSUNUN yolu.
 '
-'  Ayri bir "gelen kutusu" YOKTUR. Personel dogrudan buraya yazar; dosya
-'  bastan itibaren kalici yerindedir, sonradan hicbir yere tasinmaz.
+'  Ayri kayit dosyalari ve yil klasorleri YOKTUR. Butun veri bu kitabin
+'  icindeki iki cok gizli sayfada durur: "Oneriler" ve "Olaylar"
+'  (bkz. modDepo). Sistemde uretilen tek diger dosya gunluk yedek kopyadir.
 '
-'  Klasor bir BIRAKMA KUTUSU gibi calisir: personel buraya yazabilir ama
-'  icini goremez -- listeleyemez, kimsenin onerisini okuyamaz, hicbir dosyayi
-'  silemez (NTFS izinleri; bkz. KURULUM.md). Ustelik "yonetim\" klasoru
-'  personele yalnizca GECIS hakki verir, listeleme hakki vermez; yani
-'  projeoneri\ altinda gorunen tek sey calisma kitabi ve "yonetim" adidir.
+'  Kitabin kendisi calisiyorsa kendi tam yolu kullanilir: dosya yeniden
+'  adlandirilmis olabilir ve depo yine kendisidir.
 ' ---------------------------------------------------------------------------
-Public Function OnerilerKlasor() As String
-    OnerilerKlasor = YonetimKlasor() & "\" & KLASOR_ONERILER
+Public Function YonetimKitapYolu() As String
+    Dim kendi As String
+
+    kendi = modDosyaIO.YolTemizle(modDosyaIO.YerelYol(ThisWorkbook.Path))
+    If StrComp(modDosyaIO.KlasorAdi(kendi), KLASOR_YONETIM, vbTextCompare) = 0 Then
+        YonetimKitapYolu = modDosyaIO.YerelYol(ThisWorkbook.FullName)
+        Exit Function
+    End If
+
+    YonetimKitapYolu = YonetimKlasor() & "\" & DOSYA_YONETIM
 End Function
 
-Public Function DegerlendirmeKlasor() As String
-    DegerlendirmeKlasor = YonetimKlasor() & "\" & KLASOR_DEGERLENDIRME
-End Function
-
-' ---------------------------------------------------------------------------
-'  Yil alt klasorleri: oneriler\2026\, degerlendirme\2026\
-'  Klasor basina dosya sayisini dusuk tutar; yillik arsivleme dogal olur.
-' ---------------------------------------------------------------------------
-Public Function OnerilerYilKlasor(ByVal yil As Long) As String
-    OnerilerYilKlasor = OnerilerKlasor() & "\" & CStr(yil)
-End Function
-
-Public Function DegerlendirmeYilKlasor(ByVal yil As Long) As String
-    DegerlendirmeYilKlasor = DegerlendirmeKlasor() & "\" & CStr(yil)
+Public Function YedekKlasor() As String
+    YedekKlasor = YonetimKlasor() & "\" & KLASOR_YEDEK
 End Function

@@ -1,25 +1,37 @@
 # -*- coding: utf-8 -*-
-r"""Birakma kutusu izinlerini gercekten dogrular.
+r"""NTFS izinlerini gercek izinlerle dogrular.
 
-Sistemin gizlilik iddiasi sudur: personel "yonetim\oneriler\" klasorune oneri
-BIRAKABILIR ama yonetim tarafinda hicbir seyi GOREMEZ -- ne klasorleri
-listeleyebilir, ne baskasinin onerisini okuyabilir, ne degerlendirme notlarina
-ulasabilir, ne de bir dosyayi silebilir.
+BU SURUMDE IZIN MODELI DEGISTI. Eskiden "yonetim\oneriler\" bir BIRAKMA
+KUTUSUYDU: personel oraya yazabilir ama iceriini goremezdi. Veri artik ayri
+dosyalarda degil, yonetim kitabinin ICINDE. Excel bir dosyayi okumadan
+yazamaz; dolayisiyla personelin o dosya uzerinde okuma hakki da olmak
+ZORUNDA. Bunun uc sonucu var ve ucu de bilincli kabul edilmistir:
 
-Bu test o iddiayi gercek NTFS izinleriyle sinar: klasorleri kilitler, gercek
-gonderim makrosunu calistirir, sonra izinleri geri acip sonuca bakar.
+  1) Gizliligin siniri artik NTFS degil, dosyanin ACILIS PAROLASIDIR.
+     Personel dosyayi kopyalayabilir ama parolasiz acamaz. Tehdit modeli
+     siradan personeldir; parolayi VBA'dan cikarabilecek biri icin bu bir
+     sinir degildir (bkz. TASARIM-VE-GEREKCE.md madde 8).
+
+  2) Izinler DOSYAYA degil KLASORE, mirasla verilir. Excel kaydederken
+     dosyayi yerinde degistirmez; gecici bir dosya yazip aslinin yerine
+     koyar. Dosyaya verilen acik haklar bu sirada kaybolabilir, klasorden
+     miras alinanlar kalir. Bu test kaydetmenin ardindan dosyanin hala
+     erisilebilir oldugunu dogrular.
+
+  3) Personelin klasorde dosya olusturma ve silme hakki olmak zorundadir
+     (Excel'in gecici dosyasi ve "~$" sahiplik dosyasi icin). Korunmasi
+     gereken tek yer YEDEK KLASORUDUR: veri kaybina karsi son siginak orasi
+     oldugu icin personele kapali olmalidir.
 
     python testler\test_izinler.py
 
-IZIN UYGULAMA SIRASI ONEMLIDIR (test bunu da ornekler):
-once alt klasorler ayarlanir, "yonetim\" EN SON kisitlanir. Ters sirada
-yapilirsa izin komutlarinin kendisi calisamaz hale gelir ve klasorler
-sessizce erisilemez kalir.
+IZIN UYGULAMA SIRASI ONEMLIDIR: once alt klasor (yedek), sonra ust klasor.
+Ters sirada yapilirsa izin komutlarinin kendisi calisamaz hale gelir.
 
 NOT: Test kendi kullanicisi uzerinde calisir. Bir kullanicinin izinlerini
 kisitlayip kendi kodumuzu o kisitlar altinda kosturmak, iki ayri hesap
-gerektirmeden ulasilabilecek en yakin gerceklige denk gelir. icacls
-kullanilamiyorsa (ornegin FAT32 bir diskte) test atlanir.
+gerektirmeden ulasilabilecek en yakin gercekliktir. icacls kullanilamiyorsa
+(ornegin FAT32 bir diskte) test atlanir.
 """
 
 import os
@@ -34,17 +46,14 @@ import yardimci as y
 
 KULLANICI = f"{os.environ.get('USERDOMAIN', '')}\\{os.environ.get('USERNAME', '')}"
 
-# Personel grubuna "yonetim\oneriler\" uzerinde verilecek haklar.
-#   WD  dosya olustur / veri yaz      AD  klasor olustur / veri ekle
-#   X   klasorde gezin                RA  oznitelik oku      REA  gen. oznitelik oku
-#   WA  oznitelik yaz                 WEA gen. oznitelik yaz  RC  izinleri oku
-# BILINCLI OLARAK YOK:  RD (listele / oku),  DE (sil),  DC (alt oge sil)
-BIRAKMA_KUTUSU = "(OI)(CI)(WD,AD,X,RA,REA,WA,WEA,RC)"
+# Personelin "yonetim\" klasorunde ihtiyaci olan haklar: Degistir.
+#   Okuma + yazma + dosya olusturma + SILME (Excel'in gecici dosyasi icin).
+# Daha azi yetmez: gonderim, kitabi kaydetmek demektir.
+YONETIM_HAKLARI = "(OI)(CI)(M)"
 
-# "yonetim\" klasoru: YALNIZCA GECIS, miras bayragi YOK.
-# Miras bayragi olmadigi icin kardes klasore (degerlendirme) hicbir hak
-# sizmaz.
-YONETIM_GECIS = "(X)"
+# Yedek klasoru: personele hicbir hak yok. Yalnizca "izinleri gor" birakilir
+# ki test sonunda klasoru geri acabilsin.
+YEDEK_HAKLARI = "(RC)"
 
 
 def icacls(*argumanlar):
@@ -63,111 +72,135 @@ def _engellendi_mi(islem):
 
 def calistir():
     s = y.Sonuc("İzinler")
+    baslangic_excel = y.excel_sayisi()
 
     kok = tempfile.mkdtemp(prefix="proje_izin_")
     o = y.Ortam(kok)
-    yil_klasoru = o.oneriler_yil()
 
     try:
-        # Yil klasoru BILEREK acilmaz: uretimde de kodun kendisi olusturur ve
-        # izinleri "oneriler"den miras alir.
-        for d in (o.oneriler, o.degerlendirme):
-            os.makedirs(d, exist_ok=True)
+        os.makedirs(o.yonetim, exist_ok=True)
+        os.makedirs(o.yedek, exist_ok=True)
 
-        kaynak = os.path.join(y.CIKTI, "ProjeOneri.xlsm")
-        if not os.path.exists(kaynak):
-            raise SystemExit("cikti\\ProjeOneri.xlsm yok. Önce: python kur.py")
-        shutil.copy2(kaynak, o.oneri_kitap)
+        for kaynak, hedef in (
+            (os.path.join(y.CIKTI, "ProjeOneri.xlsm"), o.oneri_kitap),
+            (os.path.join(y.CIKTI, "yonetim", y.DOSYA_YONETIM), o.yonetim_kitap),
+        ):
+            if not os.path.exists(kaynak):
+                raise SystemExit(f"{kaynak} yok. Önce: python kur.py")
+            shutil.copy2(kaynak, hedef)
 
-        # Personelin asla gormemesi gereken bir degerlendirme notu
-        gizli_not = os.path.join(o.degerlendirme, "PRJ-26AAA_2026010100000000_1A2B.txt")
-        with open(gizli_not, "w", encoding="utf-8") as f:
-            f.write("oneri_no=PRJ-26AAA\nkarar_notu=Gizli karar gerekçesi\n"
-                    "kayit_sonu=1\n")
-        with open(o.yonetim_kitap, "wb") as f:
-            f.write(b"yonetim kitabinin yerine gecen dosya")
+        # Yedek klasorunde personelin gormemesi gereken bir kopya
+        gizli_yedek = os.path.join(o.yedek, "ProjeYonetim_20260101.xlsm")
+        shutil.copy2(o.yonetim_kitap, gizli_yedek)
 
-        # --- 1) ÖNCE alt klasörler ---------------------------------------
-        print("  · yonetim\\oneriler bırakma kutusuna çevriliyor")
-        kod, cikti = icacls(o.oneriler, "/inheritance:r")
+        # --- 1) ÖNCE alt klasör: yedek --------------------------------------
+        print("  · yedek klasörü personele kapatılıyor")
+        kod, cikti = icacls(o.yedek, "/inheritance:r")
         if kod != 0:
             print(f"\n  icacls kullanılamıyor, test atlanıyor:\n  {cikti}")
             return 0
-        kod, cikti = icacls(o.oneriler, "/grant", f"{KULLANICI}:{BIRAKMA_KUTUSU}")
+        kod, cikti = icacls(o.yedek, "/grant", f"{KULLANICI}:{YEDEK_HAKLARI}")
         if kod != 0:
             print(f"\n  izin verilemedi, test atlanıyor:\n  {cikti}")
             return 0
 
-        # Yönetim tarafının geri kalanı: personele yalnızca "izinleri gör".
-        for hedef in (o.degerlendirme, gizli_not, o.yonetim_kitap):
-            icacls(hedef, "/inheritance:r")
-            icacls(hedef, "/grant", f"{KULLANICI}:(RC)")
-
-        # --- 2) EN SON yonetim\ --------------------------------------------
+        # --- 2) SONRA üst klasör: yonetim -----------------------------------
         icacls(o.yonetim, "/inheritance:r")
-        icacls(o.yonetim, "/grant", f"{KULLANICI}:{YONETIM_GECIS}")
+        icacls(o.yonetim, "/grant", f"{KULLANICI}:{YONETIM_HAKLARI}")
 
-        # --- kilitliyken neler engellenmiş? -------------------------------
-        s.kontrol("yonetim\\ listelenemiyor",
-                  _engellendi_mi(lambda: os.listdir(o.yonetim)))
-        s.kontrol("Değerlendirme notu okunamıyor",
-                  _engellendi_mi(lambda: open(gizli_not, encoding="utf-8").read()))
-        s.kontrol("Değerlendirme notunun üzerine yazılamıyor",
+        # --- Kilitliyken neler engellenmiş? ---------------------------------
+        s.kontrol("Yedek klasörü listelenemiyor",
+                  _engellendi_mi(lambda: os.listdir(o.yedek)))
+        s.kontrol("Yedek kopya okunamıyor",
+                  _engellendi_mi(lambda: open(gizli_yedek, "rb").read()))
+        s.kontrol("Yedek klasörüne yazılamıyor",
                   _engellendi_mi(
-                      lambda: open(gizli_not, "a", encoding="utf-8").write("x")))
-        s.kontrol("Yönetim kitabı okunamıyor",
-                  _engellendi_mi(lambda: open(o.yonetim_kitap, "rb").read()))
-        s.kontrol("Öneriler klasörü listelenemiyor",
-                  _engellendi_mi(lambda: os.listdir(o.oneriler)))
+                      lambda: open(os.path.join(o.yedek, "x.txt"), "w").write("x")))
 
-        # --- kilitliyken gerçek makroyu çalıştır --------------------------
-        print("  · kilitli klasöre iki gönderim")
+        # Yonetim klasoru personele ACIKTIR -- bu bilincli bir kabuldur.
+        # Gizliligi saglayan sey klasor izni degil, dosyanin parolasidir.
+        s.kontrol("Yönetim klasörü personele açık (bilinçli kabul)",
+                  not _engellendi_mi(lambda: os.listdir(o.yonetim)))
+        s.kontrol("Depo dosyası şifreli (gizliliğin gerçek sınırı)",
+                  open(o.yonetim_kitap, "rb").read(8)
+                  == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
+
+        onceki_izin = subprocess.run(["icacls", o.yonetim_kitap],
+                                     capture_output=True, text=True).stdout
+
+        # --- Kilitliyken gerçek gönderim makrosu ---------------------------
+        print("  · kısıtlı izinlerle iki gönderim")
         numaralar = []
         with y.excel() as app:
             with y.kitap(app, o.oneri_kitap, salt_okunur=True) as wb:
-                s.esit("Kök klasör kilitli yapıda da bulunuyor",
+                s.esit("Kök klasör kısıtlı yapıda da bulunuyor",
                        os.path.normcase(o.paylasim),
                        os.path.normcase(y.calistir(app, wb, "modAyar.KokKlasor")))
                 for i in (1, 2):
                     numaralar.append(y.calistir(
                         app, wb, "modGonderim.TestGonderimi",
                         f"Kullanıcı {i}", f"1000{i}",
-                        "Kilitli klasöre yazma denemesi.", f"Öneri {i}",
+                        "Kısıtlı izinlerle yazma denemesi.", f"Öneri {i}",
                         "Bir çözüm önerisi.", "Fayda"))
 
-        s.kontrol("Kilitli klasöre gönderim yapılabildi",
-                  all(n.startswith("PRJ-") for n in numaralar), str(numaralar))
-        s.esit("İki gönderim iki farklı numara aldı", 2, len(set(numaralar)))
+            s.kontrol("Değiştir hakkıyla gönderim yapılabildi",
+                      all(str(n).startswith("PRJ-") for n in numaralar),
+                      str(numaralar))
+            s.esit("İki gönderim iki farklı numara aldı", 2, len(set(numaralar)))
 
-        if all(n.startswith("PRJ-") for n in numaralar):
-            ilk = os.path.join(yil_klasoru, numaralar[0] + ".txt")
-            s.kontrol("Bırakılan öneri okunamıyor",
-                      _engellendi_mi(lambda: open(ilk, encoding="utf-8").read()))
-            s.kontrol("Bırakılan öneri silinemiyor",
-                      _engellendi_mi(lambda: os.remove(ilk)))
-            s.kontrol("Yıl klasörü listelenemiyor",
-                      _engellendi_mi(lambda: os.listdir(yil_klasoru)))
+            # Kaydetme dosyayi yerine koyar; klasorden miras alinan haklarin
+            # bunu atlatmasi gerekir. Aksi halde ILK gonderimden sonra dosya
+            # erisilemez olur ve sistem sessizce durur.
+            s.kontrol("Kaydetmeden sonra depo hâlâ okunabiliyor",
+                      not _engellendi_mi(lambda: open(o.yonetim_kitap, "rb").read()))
+            sonraki_izin = subprocess.run(["icacls", o.yonetim_kitap],
+                                          capture_output=True, text=True).stdout
+            s.kontrol("Kaydetmeden sonra dosyanın izinleri korundu",
+                      onceki_izin.strip() == sonraki_izin.strip(),
+                      f"önce: {onceki_izin.strip()[:120]} / "
+                      f"sonra: {sonraki_izin.strip()[:120]}")
 
-        # --- izinleri aç, sonuca bak --------------------------------------
+            # Yedek alinamiyor ama HATA DA VERMIYOR: yedek alamamak kitabin
+            # acilmasini engellememelidir.
+            with y.kitap(app, o.yonetim_kitap, salt_okunur=True) as wb:
+                y.calistir(app, wb, "modDepo.YedekAl")
+                s.esit("Yedek alınamayınca kullanıcıya hata gösterilmiyor",
+                       "", y.son_mesaj(app, wb))
+
+            y.okuyucuyu_kapat()
+
+        # "with ... as app" blogu bitince degisken BAGLI KALIR ve Excel
+        # sureci, kendisine ait son COM vekili birakilana kadar olmez.
+        del app
+
+        # --- İzinleri aç, sonuca bak ----------------------------------------
         icacls(o.yonetim, "/reset", "/t", "/c", "/q")
         icacls(o.yonetim, "/grant", f"{KULLANICI}:(OI)(CI)(F)", "/t", "/c", "/q")
 
-        yazilanlar = o.oneri_dosyalar()
-        s.esit("Her iki öneri de gerçekten yazılmış", 2, len(yazilanlar))
-        for yol in yazilanlar:
-            kayit = y.kayit_oku(yol)
-            s.kontrol(f"{os.path.basename(yol)} eksiksiz ve okunabilir",
-                      kayit.get("kayit_sonu") == "1"
-                      and kayit.get("oneri_no") in numaralar
-                      and "Kilitli klasöre" in kayit.get("mevcut_durum", ""),
-                      str(sorted(kayit)))
-        s.kontrol("Değerlendirme notu bozulmadan duruyor",
-                  "Gizli karar gerekçesi" in open(gizli_not, encoding="utf-8").read())
+        s.esit("Yedek klasörüne yeni dosya yazılmamış",
+               ["ProjeYonetim_20260101.xlsm"], o.yedek_dosyalar())
+
+        oneriler, _ = y.depo_oku(o.yonetim_kitap)
+        y.okuyucuyu_kapat()
+        s.esit("Her iki öneri de gerçekten yazılmış", 2, len(oneriler))
+        s.esit("Depodaki numaralar döndürülenlerle aynı",
+               sorted(numaralar), sorted(r["oneri_no"] for r in oneriler))
+        s.kontrol("Kayıtlar eksiksiz ve okunabilir",
+                  all(r["sema"] and r["tarih"]
+                      and "Kısıtlı izinlerle" in r["mevcut_durum"]
+                      for r in oneriler),
+                  str(oneriler[:1]))
 
     finally:
         icacls(o.yonetim, "/reset", "/t", "/c", "/q")
         icacls(o.yonetim, "/grant", f"{KULLANICI}:(OI)(CI)(F)", "/t", "/c", "/q")
         shutil.rmtree(kok, ignore_errors=True)
+
+    # Aranan sey "sifir Excel" degil, TESTIN sizdirmadigidir: baslangicta
+    # baska bir isten kalan bir ornek kapanmak uzere olabilir.
+    kalan = y.excel_sayisi_bekle(baslangic_excel)
+    s.kontrol("Arkada görünmez Excel süreci kalmadı", kalan <= baslangic_excel,
+              f"(başlangıç: {baslangic_excel}, bitiş: {kalan})")
 
     return s.bitir()
 

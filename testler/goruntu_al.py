@@ -8,6 +8,7 @@ renk, kart ve dugme yerlesimi dosyayi elle acmadan gozden gecirilebilir.
     python testler\goruntu_al.py [hedef_klasor]
 """
 
+import gc
 import os
 import sys
 
@@ -64,7 +65,7 @@ def calistir(hedef_klasor):
         # pencerenin acik olmasi gerekir.
         with y.excel(gorunur=True) as app:
             # Ornek veri: bos ekranlar tasarimi degerlendirmeye yetmez.
-            with y.kitap(app, o.oneri_kitap) as wb:
+            with y.kitap(app, o.oneri_kitap, salt_okunur=True) as wb:
                 ornekler = [
                     ("Ayşe Çağlar", "10045",
                      "Gişede müşteri sırası yoğun saatlerde 20 dakikayı buluyor.",
@@ -83,9 +84,12 @@ def calistir(hedef_klasor):
                 numaralar = [y.calistir(app, wb, "modGonderim.TestGonderimi", *e)
                              for e in ornekler]
 
+            # IKISI DE SALT OKUNUR acilir. Yonetim kitabi burada yazma kipinde
+            # tutulsaydi, degerlendirme yazan gizli Excel ornegi kilidi
+            # bulamaz ve otuz saniye bekleyip pes ederdi.
             acik = {
-                "oneri": app.Workbooks.Open(os.path.abspath(o.oneri_kitap)),
-                "yonetim": app.Workbooks.Open(os.path.abspath(o.yonetim_kitap)),
+                "oneri": y.ac(app, o.oneri_kitap),
+                "yonetim": y.ac(app, o.yonetim_kitap),
             }
             wb = acik["yonetim"]
 
@@ -114,7 +118,15 @@ def calistir(hedef_klasor):
                 print(f"  ✓ {ad}")
 
             for k in acik.values():
+                k.Saved = True
                 k.Close(SaveChanges=False)
+            acik.clear()
+            y.okuyucuyu_kapat()
+
+        # Excel sureci, kendisine ait son COM vekili birakilana kadar olmez;
+        # "with ... as app" blogu bitse de degisken bagli kalir.
+        del app, wb
+        gc.collect()
 
     return uretilen
 

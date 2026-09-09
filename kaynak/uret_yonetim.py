@@ -4,8 +4,20 @@
 Dort ekran: Giris, Pano, Liste, Degerlendirme. Pano hem kitaptaki ILK
 sayfadir hem de sifre girildikten sonra acilan ekrandir; Liste bir dugme
 uzaktadir.
-Ayrica iki gizli calisma sayfasi: Veri (konsolide tablo) ve PanoVeri
-(grafiklerin kaynak araliklari).
+
+Ayrica dort gizli calisma sayfasi. Ikisi VERI DEPOSUDUR ve sistemin butun
+verisini tasir -- bu kitap yalnizca bir ekran degil, ayni zamanda veritabani:
+
+    Oneriler   satir basina bir gonderim (degismez)
+    Olaylar    satir basina bir degerlendirme (yalnizca eklenir)
+
+Digerleri turetilmis, her yenilemede bastan yazilan onbelleklerdir:
+
+    Veri       konsolide tablo (liste ve pano bundan okur)
+    PanoVeri   grafiklerin kaynak araliklari
+
+Sutun duzeni modDepo.bas'taki O_* / E_* sabitleriyle ayni olmak zorundadir;
+test_uretim.py basliklarin sirasini o sabitlerle karsilastirir.
 """
 
 from openpyxl import Workbook
@@ -22,12 +34,14 @@ SAYFA_DEGERLENDIRME = "Değerlendirme"
 SAYFA_PANO = "Pano"
 SAYFA_VERI = "Veri"
 SAYFA_PANOVERI = "PanoVeri"
+SAYFA_ONERILER = "Oneriler"
+SAYFA_OLAYLAR = "Olaylar"
 
 GIRIS_SUTUNLAR = [2.2, 24.0, 20.0, 20.0, 20.0, 14.0, 2.2]
 
 # --- Liste duzeni (modKonsolide.bas'taki sabitlerle ayni olmali) ---------
 # Sutun genislikleri en uzun degerlerine gore olculmustur: oneri numarasi
-# ("PRJ-26A7K") ve durum ("Standartlaştırıldı") kirpilmamalidir.
+# ("PRJ-2026-0001") ve durum ("Standartlaştırıldı") kirpilmamalidir.
 LISTE_SUTUNLAR = [2.2, 18.0, 13.0, 24.0, 54.0, 20.0, 2.2]
 LISTE_BASLIK_SATIR = 8           # modKonsolide.FiltreKur: ILK_SATIR - 1
 LISTE_ILK_SATIR = 9
@@ -90,12 +104,19 @@ def _giris(wb):
     u.bosluk(ws, 10, 48.0)      # "Sisteme Gir" dugmesi
     u.bosluk(ws, 11, 14.0)
 
-    u.bosluk(ws, 12, 14.0)
+    # Uyari bandi: kitap yazma kipinde acildiysa (kilit birakilamadi) burada
+    # gorunur. Sorunun tek belirtisi budur -- personel o sirada oneri
+    # gonderemez ama bunu ekip gormez.
+    bant = u.birlestir(ws, 12, 2, 12, 6)
+    bant.alignment = u.hiza("left", "center", girinti=1)
+    ws.row_dimensions[12].height = 22.0
+    wb.defined_names.add(_ad("giris_bant", SAYFA_GIRIS, 2, 12))
+
     u.bilgi_kutusu(
         ws, 13, 2, 13, 6,
-        "Bu ekran yalnızca Değerlendirme ekibi içindir. Gördüğünüz her şey "
-        "ortak klasördeki dosyalardan yeniden üretilir; bu dosya bozulsa bile "
-        "veri kaybolmaz.",
+        "Bu ekran yalnızca Değerlendirme ekibi içindir. Önerilerin ve "
+        "değerlendirmelerin tamamı bu dosyanın içinde saklanır; her açılışta "
+        "yanındaki yedek klasörüne günlük bir kopya alınır.",
     )
     ws.row_dimensions[13].height = 44.0
 
@@ -188,7 +209,7 @@ def _degerlendirme(wb):
 
     # --- Degerlendirme girisleri -----------------------------------------
     u.bolum_basligi(ws, 19, 2, 6, "DEĞERLENDİRME",
-                    "Her kayıt yeni bir olay dosyası olarak eklenir; "
+                    "Her kayıt geçmişe yeni bir satır olarak eklenir; "
                     "önceki değerlendirmeler silinmez.")
     u.bosluk(ws, 21, 8.0)
 
@@ -208,7 +229,7 @@ def _degerlendirme(wb):
 
     # --- Gecmis -----------------------------------------------------------
     u.bolum_basligi(ws, 30, 2, 6, "DEĞERLENDİRME GEÇMİŞİ",
-                    "En yeni kayıt üstte. Tam geçmiş ortak klasörde saklanır.")
+                    "En yeni kayıt üstte. Tam geçmiş bu dosyanın içinde saklanır.")
     u.bosluk(ws, 32, 6.0)
 
     u.tablo_basligi(ws, DEG_GECMIS_BASLIK, 2, 6,
@@ -330,13 +351,56 @@ def _pano(wb):
 # ==========================================================================
 #  Gizli calisma sayfalari
 # ==========================================================================
+
+# --- VERI DEPOSU ----------------------------------------------------------
+# Bu iki liste sutun duzeninin PYTHON tarafidir; VBA tarafi modDepo.bas'taki
+# O_* ve E_* sabitleridir. Ikisi ayrilirsa gonderim yanlis sutuna yazilir ve
+# hicbir sey hata vermez -- test_uretim.py bu yuzden her basligin konumunu
+# karsilik gelen sabitle karsilastirir.
+ONERILER_BASLIKLARI = [
+    "sema", "oneri_no", "tarih",
+    "ad_soyad", "sicil_no",
+    "mevcut_durum",
+    "oneri_basligi", "cozum_onerisi", "beklenen_fayda",
+    "gonderen_bilgisayar", "gonderen_kullanici",
+]
+
+OLAYLAR_BASLIKLARI = [
+    "sema", "oneri_no", "olay_tarihi",
+    "yeni_durum", "karar_notu",
+    "degerlendiren_kullanici", "degerlendiren_bilgisayar",
+]
+
+# --- Turetilmis onbellek --------------------------------------------------
 VERI_BASLIKLARI = [
     "oneri_no", "tarih", "ad_soyad", "sicil_no",
     "mevcut_durum", "oneri_basligi", "cozum_onerisi", "beklenen_fayda",
     "durum",
     "ilk_olay", "son_olay", "degerlendiren", "karar_notu", "olay_sayisi",
-    "gonderen_kullanici", "kaynak_dosya",
+    "gonderen_kullanici", "kaynak_satir",
 ]
+
+
+def _depo_sayfasi(wb, ad, basliklar):
+    """Veri deposu sayfasi: baslik satiri, metin bicimi, cok gizli.
+
+    Sutunlar METIN bicimlidir. Aksi halde Excel "10045" sicil numarasini
+    sayiya, "2026-09-08T10:11:51" tarihini tarihe cevirir; basindaki sifirlar
+    ve saniye bilgisi sessizce kaybolur. VBA tarafi yazarken bicimi ayrica
+    zorlar, buradaki hazirlik elle bakildiginda da dogru gorunmesi icindir.
+    """
+    ws = wb.create_sheet(ad)
+    for i, baslik in enumerate(basliklar, start=1):
+        h = ws.cell(row=1, column=i, value=baslik)
+        h.font = u.yazi(RENK["BEYAZ"], PT["NOT"], kalin=True)
+        h.fill = u.dolgu(RENK["ANA_LACIVERT"])
+        harf = get_column_letter(i)
+        ws.column_dimensions[harf].width = 24
+        for satir in range(2, 202):
+            ws[f"{harf}{satir}"].number_format = "@"
+    ws.freeze_panes = "A2"
+    ws.sheet_state = "veryHidden"
+    return ws
 
 
 def _veri(wb):
@@ -607,6 +671,8 @@ def kitap_uret(hedef_yol, listeler):
     giris = _giris(wb)
     _liste(wb)
     _degerlendirme(wb)
+    _depo_sayfasi(wb, SAYFA_ONERILER, ONERILER_BASLIKLARI)
+    _depo_sayfasi(wb, SAYFA_OLAYLAR, OLAYLAR_BASLIKLARI)
     _veri(wb)
     _panoveri(wb)
 

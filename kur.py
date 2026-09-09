@@ -5,6 +5,12 @@ r"""Proje Öneri Sistemi -- üretim betiği.
     python kur.py oneri      yalnızca ProjeOneri.xlsm
     python kur.py yonetim    yalnızca ProjeYonetim.xlsm
 
+    python kur.py yonetim --veri "\\sunucu\...\yonetim\ProjeYonetim.xlsm"
+        Yönetim kitabını yeniden üretir AMA verdiğiniz kitaptaki önerileri ve
+        değerlendirme geçmişini yenisine taşır. Yönetim kitabı veri deposu
+        olduğu için, dolu bir kurulumu güncellerken bu şarttır -- aksi halde
+        yeni dosya boş gelir.
+
 Çalışma kitapları elle hazırlanmaz; kaynak kod düz metin dosyalarında durur
 (kaynak\vba\*.bas ve kaynak\uret_*.py), kitaplar buradan sıfırdan üretilir.
 Bir değişiklik yapmak için ilgili kaynak dosya düzenlenir ve bu betik yeniden
@@ -16,6 +22,16 @@ import os
 import re
 import shutil
 import sys
+
+# Cikti bir dosyaya ya da boruya yonlendirildiginde Python konsol degil
+# YEREL kod sayfasini (Turkce Windows'ta cp1254) kullanir ve buradaki "✓"
+# gibi karakterler UnicodeEncodeError verir. Betik o zaman, isini bitirmis
+# olmasina ragmen hata koduyla biter.
+for _akis in (sys.stdout, sys.stderr):
+    try:
+        _akis.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
 
 KOK = os.path.dirname(os.path.abspath(__file__))
 KAYNAK = os.path.join(KOK, "kaynak")
@@ -79,6 +95,31 @@ def listeler():
     }
 
 
+def ayar_sabiti(ad):
+    """modAyar.bas'taki bir String sabitini okur.
+
+    Parolalar TEK yerde durur: modAyar.bas. Python tarafinda ikinci bir kopya
+    tutulsaydi ikisi sessizce ayrilabilir ve uretilen kitap, kodun bekledigi
+    paroladan baskasiyla sifrelenebilirdi.
+    """
+    with open(os.path.join(VBA, "modAyar.bas"), "r", encoding="utf-8") as f:
+        icerik = f.read()
+    eslesme = re.search(rf'Const\s+{ad}\s+As\s+String\s*=\s*"([^"]*)"', icerik)
+    if not eslesme:
+        raise SystemExit(f"modAyar.bas içinde {ad} sabiti bulunamadı.")
+    return eslesme.group(1)
+
+
+def ayar_sayisi(ad):
+    """modAyar.bas'taki bir sayisal sabiti okur."""
+    with open(os.path.join(VBA, "modAyar.bas"), "r", encoding="utf-8") as f:
+        icerik = f.read()
+    eslesme = re.search(rf"Const\s+{ad}\s+As\s+\w+\s*=\s*(-?\d+)", icerik)
+    if not eslesme:
+        raise SystemExit(f"modAyar.bas içinde {ad} sabiti bulunamadı.")
+    return int(eslesme.group(1))
+
+
 def _bas(*adlar):
     return [os.path.join(VBA, ad + ".bas") for ad in adlar]
 
@@ -91,7 +132,7 @@ def _thisworkbook(ad):
 # ==========================================================================
 #  3. Kitap tanimlari
 # ==========================================================================
-def oneri_tanimi():
+def oneri_tanimi(veri_kaynagi=None):
     import uret_oneri
 
     taslak = os.path.join(CIKTI, "_taslak_oneri.xlsx")
@@ -101,8 +142,9 @@ def oneri_tanimi():
         "taslak": taslak,
         "hedef": hedef,
         "uret": lambda: uret_oneri.kitap_uret(taslak, listeler()),
+        # modDepo iki kitapta da bulunur: gonderim tarafi da depoya yazar.
         "moduller": _bas("modTasarim", "modAyar", "modDosyaIO", "modModel",
-                         "modUI", "modGonderim"),
+                         "modUI", "modDepo", "modGonderim"),
         "thisworkbook": _thisworkbook("ThisWorkbook_Oneri.vba"),
         # Dugme konumlari sayfa duzeniyle birlikte degistigi icin adresler
         # uret_oneri'den okunur; iki yerde ayri ayri tutulmaz.
@@ -126,10 +168,13 @@ def oneri_tanimi():
              "genislik": 78.0, "yukseklik": 26.0},
         ],
         "ek_islem": None,
+        "dosya_sifresi": None,
+        "veri_kaynagi": None,
+        "veri_sayfalari": (),
     }
 
 
-def yonetim_tanimi():
+def yonetim_tanimi(veri_kaynagi=None):
     import uret_yonetim
 
     taslak = os.path.join(CIKTI, "_taslak_yonetim.xlsx")
@@ -140,11 +185,17 @@ def yonetim_tanimi():
         "hedef": hedef,
         "uret": lambda: uret_yonetim.kitap_uret(taslak, listeler()),
         "moduller": _bas("modTasarim", "modAyar", "modDosyaIO", "modModel",
-                         "modUI", "modKonsolide", "modDegerlendirme",
-                         "modPano"),
+                         "modUI", "modDepo", "modKonsolide",
+                         "modDegerlendirme", "modPano"),
         "thisworkbook": _thisworkbook("ThisWorkbook_Yonetim.vba"),
         "dugmeler": uret_yonetim.DUGMELER,
         "ek_islem": uret_yonetim.com_ek_islem,
+        # Bu kitap veri deposudur, o yuzden acilis parolasiyla sifrelenir ve
+        # yeniden uretilirken eski verisi tasinabilir.
+        "dosya_sifresi": ayar_sabiti("SIFRE_DOSYA"),
+        "veri_kaynagi": veri_kaynagi,
+        "veri_sayfalari": (uret_yonetim.SAYFA_ONERILER,
+                           uret_yonetim.SAYFA_OLAYLAR),
     }
 
 
@@ -154,7 +205,7 @@ TANIMLAR = {"oneri": oneri_tanimi, "yonetim": yonetim_tanimi}
 # ==========================================================================
 #  4. Uretim
 # ==========================================================================
-def uret(secilenler):
+def uret(secilenler, veri_kaynagi=None):
     print("Proje Öneri Sistemi — üretim")
     print("=" * 62)
 
@@ -163,7 +214,7 @@ def uret(secilenler):
 
     os.makedirs(CIKTI, exist_ok=True)
 
-    tanimlar = [TANIMLAR[a]() for a in secilenler]
+    tanimlar = [TANIMLAR[a](veri_kaynagi) for a in secilenler]
 
     for t in tanimlar:
         t["uret"]()
@@ -176,16 +227,21 @@ def uret(secilenler):
                     app, t["taslak"], t["hedef"], t["moduller"],
                     t["thisworkbook"], t["dugmeler"],
                     ek_islem=t["ek_islem"],
-                    koruma_sifresi="po-koruma",
+                    koruma_sifresi=ayar_sabiti("SIFRE_KORUMA"),
+                    dosya_sifresi=t["dosya_sifresi"],
+                    veri_kaynagi=t["veri_kaynagi"],
+                    veri_sayfalari=t["veri_sayfalari"],
                 )
                 print(f"  [3/4] VBA + düğme eklendi        {t['ad']}  "
-                      f"({len(modul_adlari)} modül, {len(t['dugmeler'])} düğme)")
+                      f"({len(modul_adlari)} modül, {len(t['dugmeler'])} düğme)"
+                      + ("  [parolalı]" if t["dosya_sifresi"] else ""))
 
             for t in tanimlar:
                 sorunlar = com.kitap_dogrula(
                     app, t["hedef"],
                     [os.path.splitext(os.path.basename(m))[0] for m in t["moduller"]],
                     [d["makro"] for d in t["dugmeler"]],
+                    dosya_sifresi=t["dosya_sifresi"],
                 )
                 if sorunlar:
                     print(f"  [4/4] DOĞRULAMA BAŞARISIZ        {t['ad']}")
@@ -207,7 +263,19 @@ def uret(secilenler):
 
 
 def main():
-    argumanlar = [a.lower() for a in sys.argv[1:] if not a.startswith("-")]
+    ham = sys.argv[1:]
+    veri_kaynagi = None
+
+    if "--veri" in ham:
+        i = ham.index("--veri")
+        if i + 1 >= len(ham):
+            raise SystemExit("--veri bir dosya yolu bekler.")
+        veri_kaynagi = ham[i + 1]
+        if not os.path.isfile(veri_kaynagi):
+            raise SystemExit(f"--veri için verilen dosya yok: {veri_kaynagi}")
+        ham = ham[:i] + ham[i + 2:]
+
+    argumanlar = [a.lower() for a in ham if not a.startswith("-")]
     if not argumanlar:
         secilenler = ["oneri", "yonetim"]
     else:
@@ -216,7 +284,11 @@ def main():
             raise SystemExit(f"Bilinmeyen hedef: {', '.join(bilinmeyen)}  "
                              f"(geçerli: {', '.join(TANIMLAR)})")
         secilenler = argumanlar
-    uret(secilenler)
+
+    if veri_kaynagi and "yonetim" not in secilenler:
+        raise SystemExit("--veri yalnızca 'yonetim' hedefiyle anlamlıdır.")
+
+    uret(secilenler, veri_kaynagi)
 
 
 if __name__ == "__main__":

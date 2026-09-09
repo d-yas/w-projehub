@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-r"""Uctan uca dogrulama -- gercek Excel, gercek makrolar, gercek dosyalar.
+r"""Uctan uca dogrulama -- gercek Excel, gercek makrolar, gercek dosya.
 
 Bu bir taklit (mock) testi degildir: uretilen .xlsm dosyalarini Excel'de acar,
-VBA makrolarini calistirir ve sonuclari dosya sisteminden dogrular.
+VBA makrolarini calistirir ve sonuclari DISKTEKI yonetim kitabindan okur.
 
 TESTIN GOREMEDIGI (bilincli sinir):
 Makrolar COM uzerinden cagrilir. Bu yol Excel'in makro guvenlik ayarini,
@@ -15,7 +15,9 @@ listesi mutlaka bir kez uygulanmalidir.
 """
 
 import os
+import re
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -24,6 +26,7 @@ import yardimci as y
 
 def calistir():
     s = y.Sonuc("Uçtan uca")
+    baslangic_excel = y.excel_sayisi()
 
     with y.ortam() as o:
         with y.excel() as app:
@@ -35,6 +38,28 @@ def calistir():
             _gostergeler(s, app, o)
             _degerlendirme_ekrani(s, app, o)
             _form_ekrani(s, app, o)
+            _kitap_kaydedilmez(s, app, o)
+            _yedek(s, app, o)
+            _kilitliyken_gonderim(s, app, o)
+
+            # Okuyucu ornegi COM apartmani hala acikken kapatilmali.
+            y.okuyucuyu_kapat()
+
+        # "with ... as app" blogu bitince degisken BAGLI KALIR ve Excel
+        # sureci, kendisine ait son COM vekili birakilana kadar olmez.
+        del app
+
+        s.kontrol("Geriye kilit dosyası kalmadı (~$ ve .kilit)",
+                  not o.sahiplik_dosyalari(), str(o.sahiplik_dosyalari()))
+
+    # modDepo her yazma icin gizli bir Excel ornegi acar. Kapatilmayan bir
+    # ornek dosya kilidini tutmaya devam eder ve bir sonraki gonderimi otuz
+    # saniye bekletir; sayilarin esit olmasi bunu disarida birakir.
+    # Aranan sey "sifir Excel" degil, TESTIN sizdirmadigidir: baslangicta
+    # baska bir isten kalan bir ornek kapanmak uzere olabilir.
+    kalan = y.excel_sayisi_bekle(baslangic_excel)
+    s.kontrol("Arkada görünmez Excel süreci kalmadı", kalan <= baslangic_excel,
+              f"(başlangıç: {baslangic_excel}, bitiş: {kalan})")
 
     return s.bitir()
 
@@ -44,7 +69,7 @@ def calistir():
 # ==========================================================================
 def _gonderim(s, app, o):
     print("  · gönderim akışı")
-    with y.kitap(app, o.oneri_kitap) as wb:
+    with y.kitap(app, o.oneri_kitap, salt_okunur=True) as wb:
         # ThisWorkbook yalnizca bir olay tetiklendiginde derlenir; oradaki bir
         # hata aksi halde ilk kullanicida ortaya cikar. Bu cagri derlemeye zorlar.
         s.kontrol("Öneri kitabının ThisWorkbook modülü derleniyor",
@@ -57,6 +82,10 @@ def _gonderim(s, app, o):
         s.esit("Kök klasör kitabın konumundan bulundu",
                os.path.normcase(o.paylasim),
                os.path.normcase(y.calistir(app, wb, "modAyar.KokKlasor")))
+
+        s.esit("Veri deposunun yolu yönetim kitabıdır",
+               os.path.normcase(o.yonetim_kitap),
+               os.path.normcase(y.calistir(app, wb, "modAyar.YonetimKitapYolu")))
 
         # Form sayfasinda birim/israf alanlari kalmadi.
         ws = wb.Worksheets("Öneri Formu")
@@ -86,34 +115,26 @@ def _gonderim(s, app, o):
             "Onay için üç imza isteniyor.", "İmza sayısı azaltılsın",
             "İki imza yeterli olsun.", "Dosya başına 1 gün")
 
-    dosyalar = o.oneri_dosyalar()
-    s.esit("Üç gönderim üç ayrı dosya oluşturdu", 3, len(dosyalar))
+    oneriler, olaylar = y.depo_oku(o.yonetim_kitap)
+    s.esit("Üç gönderim depoya üç satır yazdı", 3, len(oneriler))
+    s.esit("Henüz değerlendirme olayı yok", 0, len(olaylar))
 
     s.kontrol("Öneri numaraları benzersiz", len({o.no1, o.no2, o.no3}) == 3)
-    s.kontrol("Öneri numarası kısa ve PRJ-YYXXX biçiminde",
-              o.no1.startswith("PRJ-") and len(o.no1) == 9
-              and o.no1.count("-") == 1, o.no1)
-    s.kontrol("Öneri numarasında karışabilen harf/rakam yok (0 O 1 I)",
-              not set(o.no1.split("-")[1][2:]) & set("O0I1"), o.no1)
+    s.kontrol("Öneri numarası PRJ-YYYY-NNNN biçiminde",
+              re.fullmatch(r"PRJ-\d{4}-\d{4}", o.no1) is not None, o.no1)
+    s.esit("Numaralar sırayla verildi", [f"PRJ-{y.yil()}-000{i}" for i in (1, 2, 3)],
+           [o.no1, o.no2, o.no3])
 
-    s.kontrol("Dosya adı öneri numarasıyla aynı",
-              sorted(os.path.splitext(os.path.basename(d))[0] for d in dosyalar)
-              == sorted([o.no1, o.no2, o.no3]))
+    s.esit("Depodaki satır sırası gönderim sırasıyla aynı",
+           [o.no1, o.no2, o.no3], [r["oneri_no"] for r in oneriler])
 
-    s.kontrol("Kayıtlar yıl alt klasörüne yazıldı",
-              all(os.path.dirname(d) == o.oneriler_yil() for d in dosyalar))
-
-    ilk = [d for d in dosyalar
-           if os.path.basename(d).startswith(o.no1)][0]
-    kayit = y.kayit_oku(ilk)
-
-    s.kontrol("Dosya UTF-8 BOM'suz", not y.bom_var_mi(ilk))
-    s.kontrol("Kayıt sonu işareti son satırda",
-              open(ilk, encoding="utf-8").read().rstrip("\n").endswith("kayit_sonu=1"))
+    kayit = oneriler[0]
     s.esit("Türkçe karakterler kayıtta bozulmadı", "Ayşe Çağlar", kayit["ad_soyad"])
-    s.esit("Şema sürümü yazıldı", "3", kayit["sema"])
-    s.kontrol("Çok satırlı alan geri çözüldü",
+    s.esit("Şema sürümü yazıldı", "4", kayit["sema"])
+    s.kontrol("Çok satırlı alan hücrede satır sonu olarak duruyor",
               kayit["mevcut_durum"].count("\n") == 1, repr(kayit["mevcut_durum"]))
+    s.esit("Sicil numarası metin olarak korundu (baştaki sıfırlar yenmez)",
+           "10045", kayit["sicil_no"])
     s.kontrol("Gönderim kaydında durum alanı YOK (durum yalnızca olaylardan gelir)",
               "durum" not in kayit, sorted(kayit))
     s.kontrol("Kayıtta birim ve israf alanları yok",
@@ -126,18 +147,195 @@ def _gonderim(s, app, o):
 
 
 # ==========================================================================
-#  6. Degerlendirme ekraninin GERCEK dugme yolu
-#
-#  Yukaridaki degerlendirme testi kayit yazma yolunu dogrular. Burasi
-#  kullanicinin izledigi yolu dener: oneriyi ekrana yukle, alanlari doldur,
-#  "Kaydet". Bu yol daha once birlesik hucre hatasi yuzunden yarida
-#  kaliyordu ve hata gorunmuyordu.
+#  2. Konsolidasyon
+# ==========================================================================
+def _konsolidasyon(s, app, o):
+    print("  · konsolidasyon")
+
+    with y.kitap(app, o.yonetim_kitap, salt_okunur=True) as wb:
+        s.kontrol("Yönetim kitabının ThisWorkbook modülü derleniyor",
+                  y.derleme_sinamasi(app, wb))
+
+        adet = y.calistir(app, wb, "modKonsolide.VeriyiKur")
+        s.esit("Üç öneri okundu", 3, adet)
+
+        s.esit("Yeniden okuma aynı sonucu veriyor", 3,
+               y.calistir(app, wb, "modKonsolide.VeriyiKur"))
+
+        # Dugmenin cagirdigi tam yol: gizli bir Excel ornegi acar, depoyu ceker,
+        # tabloyu ve panoyu kurar. Daha once burada sessizce kilitleniyordu.
+        y.calistir(app, wb, "modKonsolide.OnerileriYenile")
+        app.EnableEvents = False        # HizliModKapa olaylari geri aciyor
+        s.esit("“Önerileri Yenile” düğmesi hatasız çalıştı", "",
+               y.son_mesaj(app, wb))
+        s.kontrol("Liste özeti yazıldı",
+                  "öneri okundu" in str(
+                      wb.Worksheets("Liste").Range("liste_ozet").Value or ""),
+                  str(wb.Worksheets("Liste").Range("liste_ozet").Value))
+
+        ws = wb.Worksheets("Liste")
+        s.esit("Liste tablosuna üç satır yazıldı", 3,
+               sum(1 for r in range(9, 20)
+                   if str(ws.Cells(r, 2).Value or "").startswith("PRJ-")))
+
+        s.esit("Yeni öneriler 'Yeni' durumuyla başlıyor", "Yeni",
+               str(ws.Cells(9, 6).Value or ""))
+
+        # Sahipsiz bir olay -- oneri numarasi hicbir gonderime denk gelmiyor.
+        # Konsolidasyon onu sessizce yok saymali, patlamamali.
+        y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
+                   "PRJ-1900-9999", "Planlandı", "Sahipsiz olay.")
+        y.calistir(app, wb, "modKonsolide.OnerileriYenile")
+        app.EnableEvents = False
+        s.esit("Sahipsiz olay öneri sayısını değiştirmedi", 3,
+               y.calistir(app, wb, "modKonsolide.VeriyiKur"))
+        s.esit("Sahipsiz olaydan sonra da hata yok", "", y.son_mesaj(app, wb))
+
+    oneriler, olaylar = y.depo_oku(o.yonetim_kitap)
+    s.esit("Sahipsiz olay yine de depoda duruyor (silinmez)", 1, len(olaylar))
+    s.esit("Gönderim satırları olduğu gibi duruyor", 3, len(oneriler))
+
+
+# ==========================================================================
+#  3. Degerlendirme (ekle-only)
+# ==========================================================================
+def _degerlendirme(s, app, o):
+    print("  · değerlendirme ve geçmiş")
+
+    with y.kitap(app, o.yonetim_kitap, salt_okunur=True) as wb:
+        onceki = len(y.depo_oku(o.yonetim_kitap)[1])
+
+        # Birinci degerlendirme: planlanir.
+        y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
+                   o.no1, "Planlandı",
+                   "Şube müdürüyle görüşüldü, uygulanabilir.")
+
+        _, olaylar = y.depo_oku(o.yonetim_kitap)
+        s.esit("İlk değerlendirme bir olay satırı ekledi", onceki + 1, len(olaylar))
+        ilk_satir = dict(olaylar[-1])
+
+        y.calistir(app, wb, "modKonsolide.OnerileriYenile")
+        app.EnableEvents = False
+        s.esit("Konsolidasyon öneri sayısını değiştirmedi", 3,
+               y.calistir(app, wb, "modKonsolide.VeriyiKur"))
+
+        veri = _veri_satiri(wb, o.no1)
+        s.esit("Durum olaydan türetildi", "Planlandı", veri["durum"])
+        s.esit("Karar notu uygulandı", "Şube müdürüyle görüşüldü, uygulanabilir.",
+               veri["karar_notu"])
+
+        # Ikinci degerlendirme: YALNIZCA durum degisir, not verilmez.
+        y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
+                   o.no1, "Pilot Uygulamada", "")
+
+        _, olaylar = y.depo_oku(o.yonetim_kitap)
+        s.esit("İkinci değerlendirme ikinci satırı ekledi", onceki + 2, len(olaylar))
+        s.esit("İlk olay satırı olduğu gibi duruyor (ekle-only)",
+               ilk_satir, dict(olaylar[-2]))
+
+        y.calistir(app, wb, "modKonsolide.OnerileriYenile")
+        app.EnableEvents = False
+        veri = _veri_satiri(wb, o.no1)
+        s.esit("Son olay durumu belirledi", "Pilot Uygulamada", veri["durum"])
+        s.esit("Kısmi olay önceki karar notunu SİLMEDİ",
+               "Şube müdürüyle görüşüldü, uygulanabilir.", veri["karar_notu"])
+        s.esit("Olay sayısı iki", 2, veri["olay_sayisi"])
+
+        # Diger iki oneri: biri reddedilir, biri planlanir ama uygulanmaz.
+        y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
+                   o.no2, "Planlandı", "Kabul edildi, BT planına alındı.")
+        y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
+                   o.no3, "Reddedildi", "Mevzuat üç imzayı zorunlu kılıyor.")
+
+        y.calistir(app, wb, "modKonsolide.OnerileriYenile")
+        app.EnableEvents = False
+        s.esit("İkinci öneri planlandı olarak işlendi",
+               "Planlandı", _veri_satiri(wb, o.no2)["durum"])
+        s.esit("Üçüncü öneri reddedildi olarak işlendi",
+               "Reddedildi", _veri_satiri(wb, o.no3)["durum"])
+
+        s.esit("Bir önerinin geçmişi iki olaydan oluşuyor", 2,
+               y.calistir(app, wb, "modDegerlendirme.TestOlaySayisi", o.no1))
+
+
+def _veri_satiri(wb, oneri_no):
+    """Gizli Veri sayfasindan bir satiri sozluk olarak okur."""
+    ws = wb.Worksheets("Veri")
+    adet = int(ws.Range("veri_adet").Value or 0)
+    for r in range(2, adet + 2):
+        if str(ws.Cells(r, 1).Value or "") == oneri_no:
+            return {
+                "durum": str(ws.Cells(r, 9).Value or ""),
+                "karar_notu": str(ws.Cells(r, 13).Value or ""),
+                "olay_sayisi": int(ws.Cells(r, 14).Value or 0),
+            }
+    raise AssertionError(f"Veri sayfasında bulunamadı: {oneri_no}")
+
+
+# ==========================================================================
+#  4. Gostergeler
+# ==========================================================================
+def _gostergeler(s, app, o):
+    print("  · göstergeler")
+
+    with y.kitap(app, o.yonetim_kitap, salt_okunur=True) as wb:
+        y.calistir(app, wb, "modKonsolide.OnerileriYenile")
+        app.EnableEvents = False
+        ham = y.calistir(app, wb, "modPano.TestGostergeleri")
+        g = dict(p.split("=", 1) for p in ham.split(";"))
+
+        s.esit("Toplam öneri", "3", g["toplam"])
+
+        # Panodaki kartlarin govdesi hucre degil SEKILDIR; rakam hucrede
+        # durur ama ekranda sekil gorunur. Ikisi ayrisirsa kullanici yanlis
+        # sayiya bakar -- bu kontrol o ayrisan durumu yakalar.
+        s.esit("Kart şekli toplam öneriyi gösteriyor", "3",
+               y.calistir(app, wb, "modPano.TestKartMetni", "pano_toplam"))
+        s.esit("Bekleyen öneri yok (üçü de sonuçlandı)", "0", g["bekleyen"])
+        s.esit("Uygulamaya geçmiş bir öneri", "1", g["uygulanan"])
+        s.esit("Bu ay gelen öneri sayısı", "3", g["bu_ay"])
+
+        # "Planlandi" henuz uygulanmis sayilmaz; ikinci oneri uygulamaya
+        # alininca sayac artmalidir.
+        y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
+                   o.no2, "Standartlaştırıldı", "Tüm operasyona yaygınlaştırıldı.")
+        y.calistir(app, wb, "modKonsolide.OnerileriYenile")
+        app.EnableEvents = False
+        ham = y.calistir(app, wb, "modPano.TestGostergeleri")
+        g = dict(p.split("=", 1) for p in ham.split(";"))
+
+        s.esit("Uygulamaya geçince sayaç arttı", "2", g["uygulanan"])
+
+        # Grafik kaynak verisi
+        pv = wb.Worksheets("PanoVeri")
+        s.esit("Grafik verisi: durum dağılımı ilk satır etiketi",
+               "Yeni", str(pv.Cells(2, 1).Value or ""))
+        toplam_durum = sum(int(pv.Cells(r, 2).Value or 0) for r in range(2, 10))
+        s.esit("Grafik verisi: durum dağılımı toplamı öneri sayısına eşit",
+               3, toplam_durum)
+
+        # Grafiklerin HİÇBİR kategoriyi düşürmediği doğrulanır. Başlıksız bir
+        # kaynak aralığı verilirse Excel ilk veri satırını başlık sanar ve o
+        # kategori sessizce grafikten çıkar.
+        pano = wb.Worksheets("Pano")
+        nokta_sayilari = sorted(
+            co.Chart.SeriesCollection(1).Points().Count for co in pano.ChartObjects())
+        s.esit("Grafiklerde kategori sayıları eksiksiz (durum 8, ay 12)",
+               [8, 12], nokta_sayilari)
+        s.kontrol("Grafiklerde başlık ve gösterge kapalı",
+                  all(not co.Chart.HasTitle and not co.Chart.HasLegend
+                      for co in pano.ChartObjects()))
+
+
+# ==========================================================================
+#  5. Degerlendirme ekraninin GERCEK dugme yolu
 # ==========================================================================
 def _degerlendirme_ekrani(s, app, o):
     print("  · değerlendirme ekranı (Yükle / Kaydet düğmeleri)")
 
-    with y.kitap(app, o.yonetim_kitap) as wb:
-        y.calistir(app, wb, "modKonsolide.VeriyiKur")
+    with y.kitap(app, o.yonetim_kitap, salt_okunur=True) as wb:
+        y.calistir(app, wb, "modKonsolide.OnerileriYenile")
+        app.EnableEvents = False
         ws = wb.Worksheets("Değerlendirme")
 
         y.calistir(app, wb, "modDegerlendirme.OneriyiAc", o.no1)
@@ -158,22 +356,23 @@ def _degerlendirme_ekrani(s, app, o):
                   mesaj.startswith("hata:") and "gerekçe" in mesaj, mesaj)
 
         # Gecerli bir kayit
-        onceki = len(o.degerlendirme_dosyalar())
+        onceki = len(y.depo_oku(o.yonetim_kitap)[1])
         _ekrana_yaz(ws, {
             "dg_yeni_durum": "Ölçümleniyor",
             "dg_not": "Pilot sonuçları ölçülmeye başlandı."})
         y.calistir(app, wb, "modDegerlendirme.DegerlendirmeKaydet")
         app.EnableEvents = False        # Kaydet sonrasi yenileme olaylari geri acar
 
-        s.esit("Kaydet düğmesi yeni olay dosyası ekledi",
-               onceki + 1, len(o.degerlendirme_dosyalar()))
+        s.esit("Kaydet düğmesi yeni olay satırı ekledi",
+               onceki + 1, len(y.depo_oku(o.yonetim_kitap)[1]))
         s.kontrol("Kayıt sonrası onay bandı yazıldı",
                   "kaydedildi" in str(ws.Range("dg_bant").Value or ""),
                   str(ws.Range("dg_bant").Value))
 
-        y.calistir(app, wb, "modKonsolide.VeriyiKur")
+        # Kaydet, ekrani KENDISI tazelemeli: ayrica Yenile'ye basmak gerekmez.
         veri = _veri_satiri(wb, o.no1)
-        s.esit("Ekrandan kaydedilen durum uygulandı", "Ölçümleniyor", veri["durum"])
+        s.esit("Ekrandan kaydedilen durum hemen uygulandı", "Ölçümleniyor",
+               veri["durum"])
         s.esit("Ekrandan kaydedilen karar notu uygulandı",
                "Pilot sonuçları ölçülmeye başlandı.", veri["karar_notu"])
 
@@ -186,12 +385,7 @@ def _ekrana_yaz(ws, degerler):
 
 
 # ==========================================================================
-#  7. Form ekraninin GERCEK dugme yolu
-#
-#  Yukaridaki testler kayit yazma yolunu dogrular. Burasi kullanicinin
-#  gerçekte izledigi yolu dener: hucreler doldurulur, "Gönder" makrosu
-#  calistirilir, sonra "Temizle". Bu yol daha once sessizce bozulmustu --
-#  birlesik hucrelerde ClearContents calismiyordu ve hata gizleniyordu.
+#  6. Form ekraninin GERCEK dugme yolu
 # ==========================================================================
 def _form_ekrani(s, app, o):
     print("  · form ekranı (Gönder / Temizle düğmeleri)")
@@ -205,9 +399,8 @@ def _form_ekrani(s, app, o):
         "frm_fayda": "Rapor başına 10 dakika",
     }
 
-    onceki_dosyalar = set(o.oneri_dosyalar())
-    onceki = len(onceki_dosyalar)
-    with y.kitap(app, o.oneri_kitap) as wb:
+    onceki = len(y.depo_oku(o.yonetim_kitap)[0])
+    with y.kitap(app, o.oneri_kitap, salt_okunur=True) as wb:
         ws = wb.Worksheets("Öneri Formu")
         ws.Visible = -1
         _ekrana_yaz(ws, alanlar)
@@ -240,193 +433,136 @@ def _form_ekrani(s, app, o):
         s.kontrol("Eksik alanla gönderim reddedildi",
                   mesaj.startswith("hata:") and "Sicil No" in mesaj, mesaj)
 
-    # Öneri numarası artık zaman sıralı değil; yeni dosya ada göre değil
-    # kümeler farkıyla bulunur.
-    yeni_dosyalar = set(o.oneri_dosyalar()) - onceki_dosyalar
-    s.esit("Form ekranından tam olarak bir kayıt yazıldı", 1, len(yeni_dosyalar))
-    if not yeni_dosyalar:
-        return
-
-    kayit = y.kayit_oku(next(iter(yeni_dosyalar)))
+    oneriler, _ = y.depo_oku(o.yonetim_kitap)
+    s.esit("Form ekranından tam olarak bir kayıt yazıldı",
+           onceki + 1, len(oneriler))
+    kayit = oneriler[-1]
     s.esit("Formdaki değer kayda geçti", "Elif Karaduman", kayit["ad_soyad"])
-    s.esit("Öneri başlığı kayda geçti", "Tek ekranda rapor", kayit["oneri_basligi"])
+    s.esit("Öneri başlığı kayda geçti", "Tek ekranda rapor",
+           kayit["oneri_basligi"])
+    s.esit("Numara sıradaki değeri aldı", f"PRJ-{y.yil()}-0004", kayit["oneri_no"])
 
 
 # ==========================================================================
-#  2. Konsolidasyon
+#  7. Yonetim kitabi ASLA kaydedilmez
+#
+#  Kitap salt okunur acilir ve ekranda yapilan her sey yalnizca bellektedir.
+#  Bir kaydetme, bellekteki ESKI kopyayi diskin uzerine yazabilir ve o arada
+#  personelin gonderdigi butun onerileri silebilirdi.
 # ==========================================================================
-def _konsolidasyon(s, app, o):
-    print("  · konsolidasyon")
+def _kitap_kaydedilmez(s, app, o):
+    print("  · yönetim kitabının gerçek açılışı (Workbook_Open) ve kaydetme yasağı")
 
-    # Yarida kesilmis bir yazma taklidi: "kayit_sonu" satiri yok.
-    yarim = os.path.join(o.oneriler_yil(), "PRJ-26ZZZ.txt")
-    with open(yarim, "w", encoding="utf-8") as f:
-        f.write("sema=3\noneri_no=PRJ-26ZZZ\ntarih=2026-01-01T00:00:00\n"
-                "ad_soyad=Yarım Kayıt\n")
+    onceki_boyut = os.path.getsize(o.yonetim_kitap)
+    onceki_oneri = len(y.depo_oku(o.yonetim_kitap)[0])
+    s.esit("Bu ana kadar yedek alınmamıştı", [], o.yedek_dosyalar())
 
-    with y.kitap(app, o.yonetim_kitap) as wb:
-        s.kontrol("Yönetim kitabının ThisWorkbook modülü derleniyor",
-                  y.derleme_sinamasi(app, wb))
+    # Olaylar acik: kitabin GERCEK acilis yolu boyle calisir. Diger testler
+    # EnableEvents=False ile kostugu icin Workbook_Open'i yalnizca burasi
+    # gorur -- ve orasi yedegi alip kilidi birakan yerdir.
+    app.EnableEvents = True
+    try:
+        wb = app.Workbooks.Open(os.path.abspath(o.yonetim_kitap), 0, False, None,
+                                y.DOSYA_SIFRESI, "", True)
+        try:
+            y.sessiz_mod(app, wb, True)
 
-        adet = y.calistir(app, wb, "modKonsolide.VeriyiKur")
-        s.esit("Yarım yazılmış kayıt okunmadı", 3, adet)
+            s.kontrol("Açılışta kitap kendini salt okunura aldı (kilidi bıraktı)",
+                      bool(wb.ReadOnly))
+            s.esit("Açılışta günlük yedek alındı", 1, len(o.yedek_dosyalar()))
+            s.kontrol("Açılışta yalnızca Giriş ekranı görünür",
+                      all(w.Visible != -1 for w in wb.Worksheets
+                          if w.Name != "Giriş"))
 
-        # Gonderimler tek ve kalici klasordedir; okunmak onlari HICBIR YERE
-        # tasimaz. Yarim kayit da yerinde birakilir.
-        s.esit("Okuma dosyaları yerinden oynatmadı", 4, len(o.oneri_dosyalar()))
-        s.kontrol("Kayıtlar yönetim klasörünün altında",
-                  all(d.startswith(o.yonetim) for d in o.oneri_dosyalar()))
-        s.kontrol("Yarım kayıt yerinde duruyor", os.path.exists(yarim))
-
-        s.esit("Yeniden okuma aynı sonucu veriyor", 3,
-               y.calistir(app, wb, "modKonsolide.VeriyiKur"))
-
-        # Dugmelerin cagirdigi tam yol: olaylari geri actigi icin ThisWorkbook'u
-        # da devreye sokar. Daha once burada sessizce kilitleniyordu.
-        y.calistir(app, wb, "modKonsolide.OnerileriYenile")
+            wb.Worksheets("Veri").Cells(500, 1).Value = "bozma denemesi"
+            try:
+                wb.Save()
+            except Exception:
+                pass
+            mesaj = y.son_mesaj(app, wb)
+            s.kontrol("Kaydetme engellendi ve kullanıcıya açıklandı",
+                      mesaj.startswith("bilgi:") and "kaydedilmez" in mesaj, mesaj)
+        finally:
+            wb.Saved = True
+            wb.Close(SaveChanges=False)
+    finally:
         app.EnableEvents = False
-        s.esit("“Önerileri Yenile” düğmesi hatasız çalıştı", "",
-               y.son_mesaj(app, wb))
-        s.kontrol("Liste özeti yazıldı",
-                  "öneri okundu" in str(
-                      wb.Worksheets("Liste").Range("liste_ozet").Value or ""),
-                  str(wb.Worksheets("Liste").Range("liste_ozet").Value))
 
-        y.calistir(app, wb, "modKonsolide.ListeyiCiz")
-        ws = wb.Worksheets("Liste")
-        s.esit("Liste tablosuna üç satır yazıldı", 3,
-               sum(1 for r in range(9, 20)
-                   if str(ws.Cells(r, 2).Value or "").startswith("PRJ-")))
-
-        s.esit("Yeni öneriler 'Yeni' durumuyla başlıyor", "Yeni",
-               str(ws.Cells(9, 6).Value or ""))
-
-    os.remove(yarim)
+    s.esit("Disk dosyası değişmedi", onceki_boyut,
+           os.path.getsize(o.yonetim_kitap))
+    s.esit("Depodaki öneriler yerinde", onceki_oneri,
+           len(y.depo_oku(o.yonetim_kitap)[0]))
 
 
 # ==========================================================================
-#  3. Degerlendirme (ekle-only)
+#  8. Gunluk yedek
 # ==========================================================================
-def _degerlendirme(s, app, o):
-    print("  · değerlendirme ve geçmiş")
+def _yedek(s, app, o):
+    print("  · günlük yedek")
 
-    with y.kitap(app, o.yonetim_kitap) as wb:
-        # Birinci degerlendirme: planlanir.
-        y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
-                   o.no1, "Planlandı",
-                   "Şube müdürüyle görüşüldü, uygulanabilir.")
+    # Yedek bir onceki testte, kitabin gercek acilisinda alindi.
+    with y.kitap(app, o.yonetim_kitap, salt_okunur=True) as wb:
+        yedekler = o.yedek_dosyalar()
+        s.esit("Bir yedek kopya var", 1, len(yedekler))
+        if yedekler:
+            s.kontrol("Yedek adı tarihi taşıyor",
+                      re.fullmatch(r"ProjeYonetim_\d{8}\.xlsm", yedekler[0])
+                      is not None, yedekler[0])
+            yol = os.path.join(o.yedek, yedekler[0])
+            s.esit("Yedek, dosyanın birebir kopyası",
+                   os.path.getsize(o.yonetim_kitap), os.path.getsize(yol))
+            with open(yol, "rb") as f:
+                s.kontrol("Yedek de şifreli",
+                          f.read(8) == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
 
-        dosyalar_1 = o.degerlendirme_dosyalar()
-        s.esit("İlk değerlendirme bir olay dosyası oluşturdu", 1, len(dosyalar_1))
-        ilk_icerik = open(dosyalar_1[0], "rb").read()
-
-        adet = y.calistir(app, wb, "modKonsolide.VeriyiKur")
-        s.esit("Konsolidasyon öneri sayısını değiştirmedi", 3, adet)
-
-        veri = _veri_satiri(wb, o.no1)
-        s.esit("Durum olaydan türetildi", "Planlandı", veri["durum"])
-        s.esit("Karar notu uygulandı", "Şube müdürüyle görüşüldü, uygulanabilir.",
-               veri["karar_notu"])
-
-        # Ikinci degerlendirme: YALNIZCA durum degisir, not verilmez.
-        y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
-                   o.no1, "Pilot Uygulamada", "")
-
-        dosyalar_2 = o.degerlendirme_dosyalar()
-        s.esit("İkinci değerlendirme ikinci dosyayı ekledi", 2, len(dosyalar_2))
-        s.kontrol("İlk olay dosyası olduğu gibi duruyor (ekle-only)",
-                  os.path.exists(dosyalar_1[0])
-                  and open(dosyalar_1[0], "rb").read() == ilk_icerik)
-
-        y.calistir(app, wb, "modKonsolide.VeriyiKur")
-        veri = _veri_satiri(wb, o.no1)
-        s.esit("Son olay durumu belirledi", "Pilot Uygulamada", veri["durum"])
-        s.esit("Kısmi olay önceki karar notunu SİLMEDİ",
-               "Şube müdürüyle görüşüldü, uygulanabilir.", veri["karar_notu"])
-        s.esit("Olay sayısı iki", 2, veri["olay_sayisi"])
-
-        # Diger iki oneri: biri reddedilir, biri planlanir ama uygulanmaz.
-        y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
-                   o.no2, "Planlandı", "Kabul edildi, BT planına alındı.")
-        y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
-                   o.no3, "Reddedildi", "Mevzuat üç imzayı zorunlu kılıyor.")
-
-        y.calistir(app, wb, "modKonsolide.VeriyiKur")
-        s.esit("İkinci öneri planlandı olarak işlendi",
-               "Planlandı", _veri_satiri(wb, o.no2)["durum"])
-        s.esit("Üçüncü öneri reddedildi olarak işlendi",
-               "Reddedildi", _veri_satiri(wb, o.no3)["durum"])
-
-        # Gecmis: bir onerinin tum olaylari
-        gecmis = y.calistir(app, wb, "modDegerlendirme.OlayDosyalari", o.no1)
-        s.esit("Bir önerinin geçmişi iki olaydan oluşuyor", 2, gecmis.Count())
-
-
-def _veri_satiri(wb, oneri_no):
-    """Gizli Veri sayfasindan bir satiri sozluk olarak okur."""
-    ws = wb.Worksheets("Veri")
-    adet = int(ws.Range("veri_adet").Value or 0)
-    for r in range(2, adet + 2):
-        if str(ws.Cells(r, 1).Value or "") == oneri_no:
-            return {
-                "durum": str(ws.Cells(r, 9).Value or ""),
-                "karar_notu": str(ws.Cells(r, 13).Value or ""),
-                "olay_sayisi": int(ws.Cells(r, 14).Value or 0),
-            }
-    raise AssertionError(f"Veri sayfasında bulunamadı: {oneri_no}")
+        # Ayni gun ikinci cagri yeni kopya URETMEZ.
+        y.calistir(app, wb, "modDepo.YedekAl")
+        s.esit("Aynı gün ikinci yedek alınmadı", 1, len(o.yedek_dosyalar()))
 
 
 # ==========================================================================
-#  4. Gostergeler
+#  9. Depo baskasinda yazma kipindeyken gonderim
+#
+#  Sistemin en kritik yeni davranisi. Excel bu durumda HATA VERMEZ, dosyayi
+#  sessizce SALT OKUNUR acar; modDepo bunu catisma sayip yeniden dener ve
+#  butce dolunca anlasilir bir hata verir. Kullanicinin formu KAYBOLMAZ.
 # ==========================================================================
-def _gostergeler(s, app, o):
-    print("  · göstergeler")
+def _kilitliyken_gonderim(s, app, o):
+    print("  · depo başkasında yazma kipindeyken gönderim (≈20 sn)")
 
-    with y.kitap(app, o.yonetim_kitap) as wb:
-        y.calistir(app, wb, "modKonsolide.VeriyiKur")
-        ham = y.calistir(app, wb, "modPano.TestGostergeleri")
-        g = dict(p.split("=", 1) for p in ham.split(";"))
+    with y.excel() as tutucu:
+        kilitli = tutucu.Workbooks.Open(os.path.abspath(o.yonetim_kitap), 0,
+                                        False, None, y.DOSYA_SIFRESI, "", True)
+        try:
+            s.kontrol("Tutucu kitabı yazma kipinde açtı", not kilitli.ReadOnly)
 
-        s.esit("Toplam öneri", "3", g["toplam"])
+            baslangic = time.monotonic()
+            with y.kitap(app, o.oneri_kitap, salt_okunur=True) as wb:
+                sonuc = y.calistir(
+                    app, wb, "modGonderim.TestGonderimi",
+                    "Kilit Testi", "10100", "Depo kilitliyken gönderim denemesi.",
+                    "Kilit denemesi", "Bir çözüm önerisi.", "Fayda")
+            sure = time.monotonic() - baslangic
 
-        # Panodaki kartlarin govdesi hucre degil SEKILDIR; rakam hucrede
-        # durur ama ekranda sekil gorunur. Ikisi ayrisirsa kullanici yanlis
-        # sayiya bakar -- bu kontrol o ayrisan durumu yakalar.
-        s.esit("Kart şekli toplam öneriyi gösteriyor", "3",
-               y.calistir(app, wb, "modPano.TestKartMetni", "pano_toplam"))
-        s.esit("Bekleyen öneri yok (üçü de sonuçlandı)", "0", g["bekleyen"])
-        s.esit("Uygulamaya geçmiş bir öneri", "1", g["uygulanan"])
-        s.esit("Bu ay gelen öneri sayısı", "3", g["bu_ay"])
+            s.kontrol("Kilitliyken gönderim anlaşılır bir hatayla döndü",
+                      str(sonuc).startswith("HATA:")
+                      and "kullanılıyor" in str(sonuc), str(sonuc)[:120])
+            # Kilit hemen alinir (rakip yok); beklenen sure YAZMA butcesidir:
+            # depo acilmayi denemeye devam eder ve butce dolunca pes eder.
+            s.kontrol("Yazma bütçesi kadar bekledi, sonsuza kadar değil",
+                      10 <= sure <= 70, f"{sure:.1f} sn")
+        finally:
+            kilitli.Saved = True
+            kilitli.Close(SaveChanges=False)
 
-        # "Planlandi" henuz uygulanmis sayilmaz; ikinci oneri uygulamaya
-        # alininca sayac artmalidir.
-        y.calistir(app, wb, "modDegerlendirme.TestDegerlendirmesi",
-                   o.no2, "Standartlaştırıldı", "Tüm operasyona yaygınlaştırıldı.")
-        y.calistir(app, wb, "modKonsolide.VeriyiKur")
-        ham = y.calistir(app, wb, "modPano.TestGostergeleri")
-        g = dict(p.split("=", 1) for p in ham.split(";"))
-
-        s.esit("Uygulamaya geçince sayaç arttı", "2", g["uygulanan"])
-
-        # Grafik kaynak verisi
-        pv = wb.Worksheets("PanoVeri")
-        s.esit("Grafik verisi: durum dağılımı ilk satır etiketi",
-               "Yeni", str(pv.Cells(2, 1).Value or ""))
-        toplam_durum = sum(int(pv.Cells(r, 2).Value or 0) for r in range(2, 10))
-        s.esit("Grafik verisi: durum dağılımı toplamı öneri sayısına eşit",
-               3, toplam_durum)
-
-        # Grafiklerin HİÇBİR kategoriyi düşürmediği doğrulanır. Başlıksız bir
-        # kaynak aralığı verilirse Excel ilk veri satırını başlık sanar ve o
-        # kategori sessizce grafikten çıkar.
-        pano = wb.Worksheets("Pano")
-        nokta_sayilari = sorted(
-            co.Chart.SeriesCollection(1).Points().Count for co in pano.ChartObjects())
-        s.esit("Grafiklerde kategori sayıları eksiksiz (durum 8, ay 12)",
-               [8, 12], nokta_sayilari)
-        s.kontrol("Grafiklerde başlık ve gösterge kapalı",
-                  all(not co.Chart.HasTitle and not co.Chart.HasLegend
-                      for co in pano.ChartObjects()))
+    # Kilit birakilinca ayni gonderim calismali.
+    with y.kitap(app, o.oneri_kitap, salt_okunur=True) as wb:
+        no = y.calistir(
+            app, wb, "modGonderim.TestGonderimi",
+            "Kilit Testi", "10100", "Kilit bırakıldıktan sonra gönderim.",
+            "Kilit sonrası", "Bir çözüm önerisi.", "Fayda")
+    s.kontrol("Kilit bırakılınca gönderim yeniden çalışıyor",
+              str(no).startswith("PRJ-"), str(no))
 
 
 if __name__ == "__main__":

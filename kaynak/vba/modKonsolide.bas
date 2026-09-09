@@ -2,19 +2,30 @@ Attribute VB_Name = "modKonsolide"
 Option Explicit
 
 ' ============================================================================
-'  modKonsolide -- klasorlerden tabloya
+'  modKonsolide -- depo sayfalarindan ekrandaki tabloya
 '
-'  BU KITAP TEK DOGRULUK KAYNAGI DEGILDIR. Ekranda gorunen her sey
-'  "oneriler\" ve "degerlendirme\" klasorlerinden yeniden uretilebilir. Kitap
-'  silinse, bozulsa ya da yeniden kurulsa hicbir veri kaybolmaz.
+'  EKRANDA GORUNEN HICBIR SEY ELLE GIRILMEZ. Liste de pano da, kitabin
+'  icindeki iki depo sayfasindan (Oneriler, Olaylar) her yenilemede bastan
+'  turetilir. Gizli "Veri" sayfasi bu turetmenin sonucudur; bir onbellektir,
+'  kaynak degildir.
 '
 '  Guncel durum nasil bulunur:
-'    1) oneriler\ altindaki gonderim dosyalari okunur -- bunlar DEGISMEZDIR,
-'       hicbir zaman guncellenmez.
-'    2) degerlendirme\ altindaki olay dosyalari ad sirasiyla (= zaman
-'       sirasiyla) uzerlerine oynatilir. Her olay yalnizca DOLDURDUGU alanlari
-'       gunceller; boylece sadece durum degistiren bir olay, daha once
-'       yazilmis karar notunu silmez.
+'    1) "Oneriler" satirlari okunur -- bunlar DEGISMEZDIR, guncellenmez.
+'    2) "Olaylar" satirlari SATIR SIRASIYLA (= zaman sirasiyla) uzerlerine
+'       oynatilir. Her olay yalnizca DOLDURDUGU alanlari gunceller; boylece
+'       sadece durum degistiren bir olay, daha once yazilmis karar notunu
+'       silmez.
+'
+'  ---------------------------------------------------------------------
+'  YEREL KOPYA ve "Yenile"
+'
+'  Ekip kitabi salt okunur acilir ve gun boyu acik kalir; bu sirada personel
+'  diskteki dosyaya yeni satirlar ekler. Bellekteki kopya bunlari kendiliginden
+'  gormez. "Önerileri Yenile" once modDepo.DepoyuCek ile diskteki depo
+'  sayfalarini bu kitaba kopyalar, sonra tabloyu bastan kurar.
+'
+'  Oturum acilisinda cekmeye gerek yoktur: kitap saniyeler once diskten
+'  yuklenmistir.
 ' ============================================================================
 
 ' --- Gizli "Veri" sayfasinin sutun duzeni --------------------------------
@@ -33,7 +44,7 @@ Public Const V_DEGERLENDIREN As Long = 12
 Public Const V_KARAR_NOTU As Long = 13
 Public Const V_OLAY_SAYISI As Long = 14
 Public Const V_GONDEREN_KULLANICI As Long = 15
-Public Const V_DOSYA As Long = 16
+Public Const V_KAYNAK_SATIR As Long = 16
 Public Const V_SUTUN_SAYISI As Long = 16
 
 ' --- Liste tablosu -------------------------------------------------------
@@ -52,10 +63,23 @@ Public Const LISTE_AZAMI_SATIR As Long = 2000
 ' Oturum PANO ile acilir: ekip once genel resmi gorur, ayrintiya listeden
 ' iner. Liste bir dugme uzaktadir.
 Public Sub SistemeGir()
+    Dim hataMetni As String
+
     If Not modUI.SifreDogrula(modAyar.SIFRE_YONETIM, "Proje Öneri Yönetimi") Then Exit Sub
     modUI.OturumAc Array(modUI.SAYFA_PANO, modUI.SAYFA_LISTE, _
                          modUI.SAYFA_DEGERLENDIRME), modUI.SAYFA_PANO
-    OnerileriYenile
+
+    On Error GoTo Hata
+    modUI.HizliModAc
+    OzetYaz YerelYenile()
+    modUI.HizliModKapa
+    Exit Sub
+
+Hata:
+    hataMetni = "Hata " & Err.Number & ": " & Err.Description
+    modUI.HizliModKapa
+    modUI.Hata "Ekranlar hazırlanamadı." & vbCrLf & vbCrLf & hataMetni, _
+               "Proje Öneri Yönetimi"
 End Sub
 
 ' "Çıkış" dugmesi
@@ -63,17 +87,19 @@ Public Sub Cikis()
     modUI.OturumKapat
 End Sub
 
+' "Önerileri Yenile" dugmesi -- diskteki depoyu ceker, sonra tabloyu kurar.
 Public Sub OnerileriYenile()
     Dim adet As Long
     Dim hataMetni As String
 
     On Error GoTo Hata
     modUI.HizliModAc
+    DurumCubugu "Öneriler okunuyor..."
 
-    adet = VeriyiKur()
-    ListeyiCiz
-    modPano.PanoyuYenile
+    modDepo.DepoyuCek ThisWorkbook
+    adet = YerelYenile()
 
+    DurumCubugu ""
     modUI.HizliModKapa
     OzetYaz adet
     Exit Sub
@@ -81,10 +107,33 @@ Public Sub OnerileriYenile()
 Hata:
     ' Aciklama ILK is olarak alinir: sonraki her cagri Err'i temizler.
     hataMetni = "Hata " & Err.Number & ": " & Err.Description
+    DurumCubugu ""
     modUI.HizliModKapa
     modUI.Hata "Öneriler okunamadı." & vbCrLf & vbCrLf & hataMetni & _
-               vbCrLf & vbCrLf & "Ortak klasöre erişiminizi kontrol edin.", _
+               vbCrLf & vbCrLf & _
+               "Yönetim kitabına o anda başka bir kullanıcı yazıyor " & _
+               "olabilir; birkaç saniye sonra yeniden deneyin.", _
                "Yenileme hatası"
+End Sub
+
+' Diski OKUMADAN, kitaptaki depo sayfalarindan ekrani kurar.
+Public Function YerelYenile() As Long
+    YerelYenile = VeriyiKur()
+    ListeyiCiz
+    modPano.PanoyuYenile
+End Function
+
+' Durum cubugu yalnizca gorsel bir bilgidir; bir hata isleyicisi icinden de
+' cagrildigi icin tamamen hataya dayanikli olmalidir.
+Private Sub DurumCubugu(ByVal metin As String)
+    On Error Resume Next
+    If Len(metin) = 0 Then
+        Application.StatusBar = False
+    Else
+        Application.StatusBar = metin
+    End If
+    Err.Clear
+    On Error GoTo 0
 End Sub
 
 ' Listenin ustundeki tek satirlik ozet: kac oneri var, kaci bekliyor, ne zaman
@@ -111,83 +160,79 @@ End Sub
 
 
 ' ###########################################################################
-'  1. KLASORLERDEN "Veri" SAYFASINA
+'  1. DEPO SAYFALARINDAN "Veri" SAYFASINA
 ' ###########################################################################
 
 Public Function VeriyiKur() As Long
     Dim ws As Object
-    Dim gelenler As Collection, olaylar As Collection
-    Dim yol As Variant, kayit As Object
+    Dim oneriler As Variant, olaylar As Variant
     Dim indeks As Object
     Dim veri() As Variant
-    Dim n As Long, i As Long, no As String
+    Dim n As Long, i As Long, r As Long, no As String
 
     Set ws = VeriSayfasi()
-    Set gelenler = modDosyaIO.DosyalariTara(modAyar.OnerilerKlasor(), _
-                                            modAyar.UZANTI_KAYIT)
+    oneriler = modDepo.TabloOku(OnerilerSayfasi(), modDepo.O_SUTUN_SAYISI)
 
     modUI.KorumaKapa ws
-    ws.Range(ws.Cells(2, 1), ws.Cells(LISTE_AZAMI_SATIR + 200, V_SUTUN_SAYISI)).ClearContents
+    ws.Range(ws.Cells(2, 1), _
+             ws.Cells(LISTE_AZAMI_SATIR + 200, V_SUTUN_SAYISI)).ClearContents
 
-    n = gelenler.Count
-    If n = 0 Then
+    If IsEmpty(oneriler) Then
+        ws.Range("veri_adet").Value = 0
         modUI.KorumaAc ws
         VeriyiKur = 0
         Exit Function
     End If
 
+    n = UBound(oneriler, 1)
     ReDim veri(1 To n, 1 To V_SUTUN_SAYISI)
     Set indeks = CreateObject("Scripting.Dictionary")
     indeks.CompareMode = 1
 
     ' --- Gonderimler ------------------------------------------------------
     i = 0
-    For Each yol In gelenler
-        Set kayit = modDosyaIO.KayitOku(CStr(yol))
+    For r = 1 To n
+        no = Trim$(CStr(oneriler(r, modDepo.O_ONERI_NO) & ""))
 
-        ' Yarim yazilmis dosya yok sayilir: kayit sonu satiri yoksa gonderim
-        ' tamamlanmamistir.
-        If Not modDosyaIO.KayitTamMi(kayit) Then GoTo SonrakiGelen
-
-        no = modDosyaIO.Al(kayit, "oneri_no")
-        If Len(no) = 0 Then no = modDosyaIO.DosyaAdiUzantisiz(CStr(yol))
-
-        If Not indeks.Exists(no) Then
-            i = i + 1
-            indeks(no) = i
-            veri(i, V_ONERI_NO) = no
-            veri(i, V_TARIH) = modDosyaIO.Al(kayit, "tarih")
-            veri(i, V_AD_SOYAD) = modDosyaIO.Al(kayit, "ad_soyad")
-            veri(i, V_SICIL_NO) = modDosyaIO.Al(kayit, "sicil_no")
-            veri(i, V_MEVCUT) = modDosyaIO.Al(kayit, "mevcut_durum")
-            veri(i, V_BASLIK) = modDosyaIO.Al(kayit, "oneri_basligi")
-            veri(i, V_COZUM) = modDosyaIO.Al(kayit, "cozum_onerisi")
-            veri(i, V_FAYDA) = modDosyaIO.Al(kayit, "beklenen_fayda")
-            veri(i, V_DURUM) = modModel.DURUM_YENI     ' durum yalnizca olaylardan gelir
-            veri(i, V_ILK_OLAY) = ""
-            veri(i, V_SON_OLAY) = ""
-            veri(i, V_DEGERLENDIREN) = ""
-            veri(i, V_KARAR_NOTU) = ""
-            veri(i, V_OLAY_SAYISI) = 0
-            veri(i, V_GONDEREN_KULLANICI) = modDosyaIO.Al(kayit, "gonderen_kullanici")
-            veri(i, V_DOSYA) = CStr(yol)
+        ' Numarasiz satir yok sayilir: elle bozulmus ya da yarim birakilmis
+        ' bir satir yuzunden butun konsolidasyon durmamalidir.
+        If Len(no) > 0 Then
+            If Not indeks.Exists(no) Then
+                i = i + 1
+                indeks(no) = i
+                veri(i, V_ONERI_NO) = no
+                veri(i, V_TARIH) = oneriler(r, modDepo.O_TARIH)
+                veri(i, V_AD_SOYAD) = oneriler(r, modDepo.O_AD_SOYAD)
+                veri(i, V_SICIL_NO) = oneriler(r, modDepo.O_SICIL_NO)
+                veri(i, V_MEVCUT) = oneriler(r, modDepo.O_MEVCUT_DURUM)
+                veri(i, V_BASLIK) = oneriler(r, modDepo.O_ONERI_BASLIGI)
+                veri(i, V_COZUM) = oneriler(r, modDepo.O_COZUM_ONERISI)
+                veri(i, V_FAYDA) = oneriler(r, modDepo.O_BEKLENEN_FAYDA)
+                veri(i, V_DURUM) = modModel.DURUM_YENI   ' durum yalnizca olaylardan gelir
+                veri(i, V_ILK_OLAY) = ""
+                veri(i, V_SON_OLAY) = ""
+                veri(i, V_DEGERLENDIREN) = ""
+                veri(i, V_KARAR_NOTU) = ""
+                veri(i, V_OLAY_SAYISI) = 0
+                veri(i, V_GONDEREN_KULLANICI) = oneriler(r, modDepo.O_GONDEREN_KULLANICI)
+                veri(i, V_KAYNAK_SATIR) = r + 1          ' depo sayfasindaki satir
+            End If
         End If
-
-SonrakiGelen:
-    Next yol
+    Next r
     n = i
 
     ' --- Olaylar (ekle-only gecmis) --------------------------------------
-    Set olaylar = modDosyaIO.DosyalariTara(modAyar.DegerlendirmeKlasor(), modAyar.UZANTI_KAYIT)
-    For Each yol In olaylar
-        Set kayit = modDosyaIO.KayitOku(CStr(yol))
-        If modDosyaIO.KayitTamMi(kayit) Then
-            no = modDosyaIO.Al(kayit, "oneri_no")
-            If indeks.Exists(no) Then
-                OlayiUygula veri, CLng(indeks(no)), kayit
+    olaylar = modDepo.TabloOku(OlaylarSayfasi(), modDepo.E_SUTUN_SAYISI)
+    If Not IsEmpty(olaylar) Then
+        For r = LBound(olaylar, 1) To UBound(olaylar, 1)
+            no = Trim$(CStr(olaylar(r, modDepo.E_ONERI_NO) & ""))
+            If Len(no) > 0 Then
+                If indeks.Exists(no) Then
+                    OlayiUygula veri, CLng(indeks(no)), olaylar, r
+                End If
             End If
-        End If
-    Next yol
+        Next r
+    End If
 
     If n > 0 Then
         ws.Cells(2, 1).Resize(n, V_SUTUN_SAYISI).Value = veri
@@ -199,26 +244,27 @@ SonrakiGelen:
 End Function
 
 
-' Bir olayi kayda uygular. Yalnizca DOLU alanlar yazilir: kismi bir olay
-' (ornegin yalnizca durum degisikligi) onceki karar notunu silmemelidir.
-Private Sub OlayiUygula(ByRef veri() As Variant, ByVal i As Long, ByVal kayit As Object)
+' Bir olay satirini kayda uygular. Yalnizca DOLU alanlar yazilir: kismi bir
+' olay (ornegin yalnizca durum degisikligi) onceki karar notunu silmemelidir.
+Private Sub OlayiUygula(ByRef veri() As Variant, ByVal i As Long, _
+                        ByVal olaylar As Variant, ByVal r As Long)
     Dim s As String
 
-    s = modDosyaIO.Al(kayit, "yeni_durum")
+    s = Trim$(CStr(olaylar(r, modDepo.E_YENI_DURUM) & ""))
     If Len(s) > 0 Then
         If modModel.DurumGecerliMi(s) Then veri(i, V_DURUM) = s
     End If
 
-    s = modDosyaIO.Al(kayit, "karar_notu")
+    s = CStr(olaylar(r, modDepo.E_KARAR_NOTU) & "")
     If Len(s) > 0 Then veri(i, V_KARAR_NOTU) = s
 
-    s = modDosyaIO.Al(kayit, "olay_tarihi")
+    s = Trim$(CStr(olaylar(r, modDepo.E_OLAY_TARIHI) & ""))
     If Len(s) > 0 Then
         If Len(CStr(veri(i, V_ILK_OLAY))) = 0 Then veri(i, V_ILK_OLAY) = s
         veri(i, V_SON_OLAY) = s
     End If
 
-    s = modDosyaIO.Al(kayit, "degerlendiren_kullanici")
+    s = Trim$(CStr(olaylar(r, modDepo.E_DEGERLENDIREN_KULLANICI) & ""))
     If Len(s) > 0 Then veri(i, V_DEGERLENDIREN) = s
 
     veri(i, V_OLAY_SAYISI) = CLng(veri(i, V_OLAY_SAYISI)) + 1
@@ -336,6 +382,16 @@ End Function
 
 Public Function ListeSayfasi() As Object
     Set ListeSayfasi = ThisWorkbook.Worksheets(modUI.SAYFA_LISTE)
+End Function
+
+' Bu kitaptaki depo sayfalari. Diskteki dosyanin ayni adli sayfalarinin yerel
+' kopyasidir; modDepo.DepoyuCek her yenilemede uzerine yazar.
+Public Function OnerilerSayfasi() As Object
+    Set OnerilerSayfasi = ThisWorkbook.Worksheets(modDepo.SAYFA_ONERILER)
+End Function
+
+Public Function OlaylarSayfasi() As Object
+    Set OlaylarSayfasi = ThisWorkbook.Worksheets(modDepo.SAYFA_OLAYLAR)
 End Function
 
 ' Listede uzerine tiklanan satirin oneri numarasi. Tablo disinda bir yer

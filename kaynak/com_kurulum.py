@@ -37,6 +37,9 @@ MSO_ALIGN_LEFT = 1
 MSO_ALIGN_CENTER = 2
 MSO_SHADOW_DIS_ALT_ORTA = 25   # msoShadow25 -- alt-orta dis golge
 XL_FREE_FLOATING = 3           # xlFreeFloating
+XL_YUKARI = -4162              # xlUp
+XL_SOLA = -4159                # xlToLeft
+MSO_GUVENLIK_KAPALI = 3        # msoAutomationSecurityForceDisable
 
 
 # ==========================================================================
@@ -86,6 +89,14 @@ def excel_oturumu(gorunur=False):
     app.DisplayAlerts = False
     app.EnableEvents = False          # uretim sirasinda Workbook_Open calismasin
     app.ScreenUpdating = gorunur
+    # EnableEvents tek basina yetmez: uretilen kitap yeniden acildiginda
+    # (kitap_dogrula, veri_aktar) makrolarin hic calismamasi gerekir. Yonetim
+    # kitabinin Workbook_Open'i yedek alip kitabi salt okunura cevirir; uretim
+    # sirasinda ikisi de istenmez.
+    try:
+        app.AutomationSecurity = MSO_GUVENLIK_KAPALI
+    except Exception:
+        pass
     try:
         yield app
     finally:
@@ -335,9 +346,59 @@ def dugme_ekle(ws, hucre_adresi, metin, makro, birincil=True, varyant=None,
 # ==========================================================================
 #  Ana islem
 # ==========================================================================
+def veri_aktar(app, wb, eski_yol, sifre, sayfalar):
+    """Eski kitaptaki depo satirlarini yeni uretilen kitaba tasir.
+
+    Yonetim kitabi artik VERI DEPOSUDUR: yeniden uretmek, hicbir sey
+    yapilmazsa butun onerileri ve butun degerlendirme gecmisini silmek
+    demektir. Bu yordam onlari once okuyup yenisine yazar; boylece ekran
+    degisikligi icin kur.py'yi yeniden calistirmak guvenli kalir.
+
+    Kaydedilen sayfa sayilarini {sayfa: satir} olarak dondurur.
+    """
+    eski = app.Workbooks.Open(os.path.abspath(eski_yol), 0, True, None, sifre or "",
+                              "", True)
+    try:
+        toplam = {}
+        for ad in sayfalar:
+            try:
+                kaynak = eski.Worksheets(ad)
+            except Exception:
+                toplam[ad] = 0        # eski surumde bu sayfa yoktu
+                continue
+
+            son = kaynak.Cells(kaynak.Rows.Count, 1).End(XL_YUKARI).Row
+            if son < 2:
+                toplam[ad] = 0
+                continue
+            sutun = kaynak.Cells(1, kaynak.Columns.Count).End(XL_SOLA).Column
+
+            deger = kaynak.Range(kaynak.Cells(2, 1),
+                                 kaynak.Cells(son, sutun)).Value
+            hedef = wb.Worksheets(ad)
+            alan = hedef.Range(hedef.Cells(2, 1), hedef.Cells(son, sutun))
+            alan.NumberFormat = "@"
+            alan.Value = deger
+            toplam[ad] = son - 1
+        return toplam
+    finally:
+        try:
+            eski.Close(SaveChanges=False)
+        except Exception:
+            pass
+
+
 def kitap_isle(app, taslak_yol, hedef_yol, modul_yollari, thisworkbook_kod,
-               dugmeler, ek_islem=None, koruma_sifresi=None):
-    """Taslak .xlsx dosyasini alir, VBA + dugme + koruma ekleyip .xlsm kaydeder."""
+               dugmeler, ek_islem=None, koruma_sifresi=None,
+               dosya_sifresi=None, veri_kaynagi=None, veri_sayfalari=()):
+    """Taslak .xlsx dosyasini alir, VBA + dugme + koruma ekleyip .xlsm kaydeder.
+
+    dosya_sifresi verilirse dosya ACILIS PAROLASIYLA sifrelenir; yonetim
+    kitabinin gizliligi buna dayanir.
+
+    veri_kaynagi verilirse oradaki depo satirlari yeni kitaba tasinir
+    (bkz. veri_aktar).
+    """
     wb = app.Workbooks.Open(os.path.abspath(taslak_yol))
     try:
         eklenen = [modul_ekle(wb, y) for y in modul_yollari]
@@ -357,6 +418,14 @@ def kitap_isle(app, taslak_yol, hedef_yol, modul_yollari, thisworkbook_kod,
 
         if ek_islem:
             ek_islem(wb)
+
+        # Veri aktarimi korumadan ONCE yapilir: sonra yapilsa her sayfayi
+        # yeniden acmak gerekirdi.
+        if veri_kaynagi and veri_sayfalari:
+            aktarilan = veri_aktar(app, wb, veri_kaynagi, dosya_sifresi,
+                                   veri_sayfalari)
+            print("        veri taşındı: " +
+                  ", ".join(f"{a}={n}" for a, n in aktarilan.items()))
 
         if koruma_sifresi:
             for ws in wb.Worksheets:
@@ -379,7 +448,10 @@ def kitap_isle(app, taslak_yol, hedef_yol, modul_yollari, thisworkbook_kod,
             os.makedirs(klasor, exist_ok=True)
         if os.path.exists(hedef):
             os.remove(hedef)
-        wb.SaveAs(hedef, FileFormat=XL_OPENXML_MACRO)
+        if dosya_sifresi:
+            wb.SaveAs(hedef, FileFormat=XL_OPENXML_MACRO, Password=dosya_sifresi)
+        else:
+            wb.SaveAs(hedef, FileFormat=XL_OPENXML_MACRO)
         return eklenen
     finally:
         try:
@@ -388,10 +460,16 @@ def kitap_isle(app, taslak_yol, hedef_yol, modul_yollari, thisworkbook_kod,
             pass
 
 
-def kitap_dogrula(app, xlsm_yolu, beklenen_moduller, beklenen_makrolar):
-    """Uretilen dosyayi yeniden acip modul ve dugme baglantilarini denetler."""
+def kitap_dogrula(app, xlsm_yolu, beklenen_moduller, beklenen_makrolar,
+                  dosya_sifresi=None):
+    """Uretilen dosyayi yeniden acip modul ve dugme baglantilarini denetler.
+
+    Parola HER ZAMAN acikca gecilir: parolasi verilmeyen sifreli bir dosya
+    gorunmez Excel'de parola diyalogu acar ve cagri hic geri donmez.
+    """
     sorunlar = []
-    wb = app.Workbooks.Open(os.path.abspath(xlsm_yolu))
+    wb = app.Workbooks.Open(os.path.abspath(xlsm_yolu), 0, False, None,
+                            dosya_sifresi or "", "", True)
     try:
         mevcut = {c.Name for c in wb.VBProject.VBComponents}
         for m in beklenen_moduller:

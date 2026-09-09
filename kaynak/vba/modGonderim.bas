@@ -1,35 +1,17 @@
 Attribute VB_Name = "modGonderim"
 Option Explicit
 
-' NOT: Modul duzeyi bildirimler (Const, Dim) VBA'da YALNIZCA burada, ilk
-' yordamdan once bulunabilir. Yordamlar arasina konan bir Const derleme
-' hatasi verir; uustelik VBA modulleri yordam bazinda derledigi icin hata
-' yalnizca o yordam ilk cagrildiginda ortaya cikar.
-
-' Ayni oneri numarasina denk gelinirse kac kez yeniden denenecegi.
-Private Const AZAMI_DENEME As Long = 12
-
 ' ============================================================================
 '  modGonderim -- personel tarafi: giris, form dogrulama, gonderim
 '
-'  Sistemin temel kurali burada uygulanir: KIMSE ORTAK BIR DOSYAYA YAZMAZ.
-'  Her gonderim "yonetim\oneriler\<yil>\" altina KENDI dosyasini birakir. Iki kisi ayni
-'  anda gonderse bile ayri dosyalara yazarlar; cakisma onlenmis degil,
-'  yapisal olarak imkansizdir.
+'  Gonderim, yonetim kitabinin icindeki "Oneriler" sayfasina BIR SATIR ekler.
+'  Ayri kayit dosyasi yoktur. Yazmanin nasil catismasiz yapildigi ve neden
+'  ayri bir gizli Excel ornegi kullanildigi modDepo'nun basinda anlatilir;
+'  bu modul o kapiyi cagirir, kilit ve yeniden deneme oraya aittir.
 '
 '  Form alanlari hucre adresiyle degil ADLANDIRILMIS ARALIKLARLA baglanir
 '  (frm_ad_soyad gibi). Boylece sayfa duzeni degistiginde kod degismez.
 ' ============================================================================
-
-' Kayit dosyasindaki alan sirasi. Dosyayi Not Defteri'yle acan biri icin
-' okunabilir bir sira: once kimlik, sonra sorun, sonra oneri, sonra iz kaydi.
-Private Function KayitAlanlari() As Variant
-    KayitAlanlari = Array("sema", "oneri_no", "tarih", _
-                          "ad_soyad", "sicil_no", _
-                          "mevcut_durum", _
-                          "oneri_basligi", "cozum_onerisi", "beklenen_fayda", _
-                          "gonderen_bilgisayar", "gonderen_kullanici")
-End Function
 
 
 ' ###########################################################################
@@ -86,10 +68,12 @@ Public Sub OneriGonder()
 Hata:
     modUI.BantYaz ws, "frm_bant", "⚠  Gönderim yapılamadı.", _
                   modTasarim.CLR_UYARI_ZEMIN, modTasarim.CLR_UYARI_YAZI
-    modUI.Hata "Öneri kaydedilemedi." & vbCrLf & vbCrLf & _
+    modUI.Hata "Öneriniz kaydedilemedi." & vbCrLf & vbCrLf & _
                Err.Description & vbCrLf & vbCrLf & _
-               "Ortak klasöre erişiminiz olduğundan emin olun; sorun " & _
-               "sürerse Değerlendirme ekibine başvurun.", "Gönderim hatası"
+               "Yönetim kitabı şu anda başka bir kullanıcı tarafından " & _
+               "kullanılıyor olabilir. Birkaç saniye sonra yeniden deneyin; " & _
+               "yazdıklarınız formda duruyor. Sorun sürerse Değerlendirme " & _
+               "ekibine başvurun.", "Gönderim hatası"
 End Sub
 
 ' "Temizle" dugmesi -- form sayfasi
@@ -128,64 +112,19 @@ End Sub
 ' ###########################################################################
 
 ' ---------------------------------------------------------------------------
-'  KaydiYaz -- numara uret, yaz; ad kapilmissa yeni numarayla yeniden dene.
+'  KaydiYaz -- iz kaydi alanlarini doldurup depoya bir satir ekletir.
 '
-'  Numara kisa oldugu icin (gun + uc karakter) ayni gun icinde ayni numaranin
-'  iki kez uretilmesi -- olasi olmasa da -- mumkundur. Yazma denemesi hedef
-'  dosya varsa BASARISIZ doner ve hicbir seyin uzerine yazilmaz; burada yeni
-'  bir numara uretilip yeniden denenir. Boylece kisa numara, kayit kaybi
-'  riski getirmeden kullanilabilir.
+'  Oneri NUMARASI burada uretilmez: numara sirali oldugu icin ancak dosya
+'  kilidi elimizdeyken, yani depo yazma kipinde acikken guvenle uretilebilir.
+'  Onu modDepo yapar ve uretilen numarayi geri verir.
 ' ---------------------------------------------------------------------------
 Private Function KaydiYaz(ByVal sozluk As Object) As String
-    Dim klasor As String, oneriNo As String, hedefDosya As String
-    Dim deneme As Long, aciklama As String
+    sozluk("sema") = modAyar.SEMA_SURUMU
+    sozluk("tarih") = Format$(Now, "yyyy-mm-dd") & "T" & Format$(Now, "hh:nn:ss")
+    sozluk("gonderen_bilgisayar") = Environ$("COMPUTERNAME")
+    sozluk("gonderen_kullanici") = Environ$("USERNAME")
 
-    klasor = modAyar.OnerilerYilKlasor(Year(Now))
-    modDosyaIO.KlasorZinciriOlustur klasor
-
-    For deneme = 1 To AZAMI_DENEME
-        oneriNo = OneriNoUret()
-        hedefDosya = klasor & "\" & oneriNo & modAyar.UZANTI_KAYIT
-
-        sozluk("sema") = modAyar.SEMA_SURUMU
-        sozluk("oneri_no") = oneriNo
-        sozluk("tarih") = Format$(Now, "yyyy-mm-dd") & "T" & Format$(Now, "hh:nn:ss")
-        sozluk("gonderen_bilgisayar") = Environ$("COMPUTERNAME")
-        sozluk("gonderen_kullanici") = Environ$("USERNAME")
-
-        If modDosyaIO.TamKayitYazmayiDene( _
-               hedefDosya, modDosyaIO.KayitMetniUret(sozluk, KayitAlanlari()), _
-               aciklama) Then
-            KaydiYaz = oneriNo
-            Exit Function
-        End If
-    Next deneme
-
-    ' Buraya gelinmesinin gercekci tek nedeni izin sorunudur: ayni gun icinde
-    ' art arda on iki kez ayni numaraya denk gelme ihtimali yok denecek kadar
-    ' kucuktur.
-    Err.Raise vbObjectError + 920, "modGonderim.KaydiYaz", _
-              "Öneri klasörüne yazılamadı." & vbCrLf & aciklama & vbCrLf & _
-              "Ortak klasöre yazma izniniz olmayabilir."
-End Function
-
-' ---------------------------------------------------------------------------
-'  Oneri numarasi:  PRJ-26A7K   (PRJ - yil - uc rastgele karakter)
-'
-'  Telefonda soylenebilmeli, elle yazilabilmeli, bir yere not edilebilmeli.
-'
-'  Sirali numara (000001) kullanilamaz: sirali sayac ortak bir dosya
-'  gerektirir, o da "kimse ortak dosyaya yazmaz" kuralini bozar. Rastgele
-'  ek, merkezi bir sayac olmadan benzersizligi saglar; ayni yil icindeki
-'  kalan catisma ihtimalini KaydiYaz'daki yeniden deneme kapatir.
-'
-'  Yil neden duruyor: dosyalar yil klasorlerine yazilir ve "varsa
-'  olusturma" kontrolu yalnizca ayni klasorde calisir. Yil olmasaydi iki
-'  farkli yilda uretilen ayni numara sessizce iki oneriye verilirdi.
-' ---------------------------------------------------------------------------
-Public Function OneriNoUret() As String
-    OneriNoUret = modAyar.ONEK_ONERI_NO & "-" & Format$(Now, "yy") & _
-                  modDosyaIO.KisaRastgele(3)
+    KaydiYaz = modDepo.OneriEkle(sozluk)
 End Function
 
 

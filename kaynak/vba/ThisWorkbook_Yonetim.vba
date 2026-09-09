@@ -3,15 +3,74 @@ Option Explicit
 ' ============================================================================
 '  ProjeYonetim.xlsm -- ThisWorkbook
 '
-'  Kitap her acildiginda kapali konuma doner: yalnizca Giris ekrani gorunur.
+'  BU KITAP VERI DEPOSUDUR. Butun oneriler ve butun degerlendirme gecmisi
+'  icindeki iki cok gizli sayfada durur (bkz. modDepo). Bu yuzden acilistaki
+'  uc is, ekranlardan once gelir:
+'
+'  1) YEDEK. Veri tek bir dosyada durdugu icin gunluk disk kopyasi tek gercek
+'     sigortadir. Kilit hala bizdeyken alinir: o an dosyayi kimse
+'     degistiremez, yani kopya tutarlidir.
+'
+'  2) SALT OKUNURA GEC. Ekip kitabi gun boyu acik tutar. Yazma kilidi bizde
+'     kalirsa personel HICBIR oneri gonderemez. ChangeFileAccess kilidi
+'     birakir; kitap ekranda calismaya devam eder, yalnizca kaydedilemez.
+'
+'  3) EKRANLARI KAPAT. Kitap her acilista sifre kapisina doner.
+'
 '  Sayfa korumasi UserInterfaceOnly:=True ile yeniden kurulur; bu bayrak
 '  dosyada saklanmaz, aksi halde makrolar korumali sayfalara yazamaz.
 ' ============================================================================
 
 Private Sub Workbook_Open()
     On Error Resume Next
+
+    modDepo.YedekAl
+    modDepo.SaltOkunuraGec
+
     modUI.KorumalariKur
     modUI.OturumKapat
+
+    ' Kilit birakilamadiysa personel gonderim yapamaz ve bunu kimse fark
+    ' etmez. Giris ekranindaki bant, sorunu ekibin gorecegi tek yerdir.
+    If Not modDepo.SaltOkunurMu() Then
+        modUI.BantYaz ThisWorkbook.Worksheets(modUI.SAYFA_GIRIS), "giris_bant", _
+            "⚠  Bu kitap yazma kipinde açıldı. Kapatıp yeniden açın; " & _
+            "aksi halde personel öneri gönderemez.", _
+            modTasarim.CLR_UYARI_ZEMIN, modTasarim.CLR_UYARI_YAZI
+    End If
+
+    On Error GoTo 0
+End Sub
+
+
+' Kitabin kendisi ASLA kaydedilmez.
+'
+' Kitap salt okunur acilir, yani ekranda yapilan her sey yalnizca bellektedir.
+' Bir kaydetme denemesi -- Ctrl+S ya da kapanistaki "kaydedilsin mi" -- iki
+' turlu zarar verebilirdi: ya reddedilip kullaniciyi "Farkli Kaydet"e
+' yonlendirir ve depo ikiye bolunurdu, ya da (kilit bir sekilde bizdeyse)
+' BELLEKTEKI ESKI kopya diskin uzerine yazilir ve o arada personelin
+' gonderdigi butun oneriler silinirdi.
+'
+' NOT: Cancel ByRef olmak ZORUNDADIR (varsayilan). ByVal yazilirsa imza olayin
+' tanimina uymaz ve bu modul DERLENMEZ.
+Private Sub Workbook_BeforeSave(ByVal SaveAsUI As Boolean, Cancel As Boolean)
+    Cancel = True
+    ThisWorkbook.Saved = True
+    modUI.Bilgi "Bu kitap kaydedilmez; verinin tamamı zaten dosyanın " & _
+                "içindedir ve öneriler ile değerlendirmeler kaydedildikleri " & _
+                "anda diske yazılır." & vbCrLf & vbCrLf & _
+                "Ekranda gördüğünüzü tazelemek için “Önerileri Yenile” " & _
+                "düğmesine basın.", "Proje Öneri Yönetimi"
+End Sub
+
+
+' Kapanista "değişiklikler kaydedilsin mi?" sorusu cikmasin: kitap salt
+' okunur ve bellekteki degisiklikler (acilan/gizlenen ekranlar, cekilen veri)
+' bilerek atilir.
+Private Sub Workbook_BeforeClose(Cancel As Boolean)
+    On Error Resume Next
+    ThisWorkbook.Saved = True
     On Error GoTo 0
 End Sub
 
@@ -31,9 +90,6 @@ End Function
 ' Listede bir satira cift tiklamak o oneriyi degerlendirme ekraninda acar.
 ' Dugmeye gitmeden calisan bu kisayol, gunluk kullanimda en cok tekrarlanan
 ' islemi tek harekete indirir.
-' NOT: Cancel ByRef olmak ZORUNDADIR (varsayilan). ByVal yazilirsa imza olayin
-' tanimina uymaz ve bu modul DERLENMEZ; hata ancak ilk olay tetiklendiginde
-' ortaya cikar. DerlemeSinamasi() bunu her testte yakalar.
 Private Sub Workbook_SheetBeforeDoubleClick(ByVal Sh As Object, ByVal Target As Range, _
                                             Cancel As Boolean)
     Dim no As String
@@ -47,4 +103,3 @@ Private Sub Workbook_SheetBeforeDoubleClick(ByVal Sh As Object, ByVal Target As 
     Cancel = True
     modDegerlendirme.OneriyiAc no
 End Sub
-

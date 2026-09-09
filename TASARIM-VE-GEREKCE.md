@@ -1,4 +1,4 @@
-# Proje Öneri Sistemi — Sürüm 2 (Ortak Klasör)
+# Proje Öneri Sistemi — Sürüm 2 (İki Excel Dosyası)
 ## Tasarım, gerekçe ve kısıtlar
 
 Bu belge Sürüm 2'nin **neden böyle tasarlandığını** anlatır. Nasıl kurulacağı
@@ -11,16 +11,22 @@ Bu belge Sürüm 2'nin **neden böyle tasarlandığını** anlatır. Nasıl kuru
 |  |  |
 |---|---|
 | **Amaç** | Personelin iyileştirme önerisi göndermesi, Değerlendirme ekibinin bunları PDCA döngüsüyle takip etmesi |
-| **Yaklaşım** | Sunucu yok. Her şey bir ağ paylaşımındaki Excel dosyaları ve klasörlerle yürür |
+| **Yaklaşım** | Sunucu yok, veritabanı yok, kayıt dosyası yok. **Yalnızca iki Excel dosyası** |
 | **Kullanıcıda kurulum** | Yok. Herkeste zaten olan Excel yeterli |
 | **Tek gerçek gereksinim** | Makroların çalışmasına izin verilmesi |
-| **Durum** | Tamamlandı; 145'ten fazla otomatik kontrolle, gerçek Excel'de doğrulandı |
-| **Karar bekleyen** | Banka BT'sinin makro ve güvenilir konum politikası (madde 9) |
+| **Durum** | Tamamlandı; 250'den fazla otomatik kontrolle, gerçek Excel'de doğrulandı |
+| **Karar bekleyen** | Banka BT'sinin makro ve güvenilir konum politikası (madde 10) |
 
 **Neden bu sürüm var:** Sürüm 1 sürekli açık bir bilgisayarda Flask sunucusu
 çalıştırır. Böyle bir makine tahsis edilemezse ya da BT ağda uygulama sunucusu
 istemezse tüm sistem çöker. Sürüm 2 aynı işi **hiçbir sunucu olmadan** yapar;
 iki sürüm birbirinden bağımsızdır, hangisi uygunsa o seçilir.
+
+**Sürüm 2 içinde yapılan büyük değişiklik.** Sürüm 2 önce her gönderimi ve her
+değerlendirmeyi ortak klasöre ayrı bir metin dosyası olarak yazıyordu. Bu
+katman tümüyle kaldırıldı: sistemde artık **hiçbir kayıt dosyası yok**, veri
+Yönetim kitabının içindeki iki gizli sayfada duruyor. Gerekçesi, bedelleri ve
+yerini alan eşzamanlılık kuralı 3. ve 4. maddelerde.
 
 ---
 
@@ -43,7 +49,8 @@ Tasarımın tamamı dört kısıtın sonucudur. Her karar bir kısıta cevaptır
 Sürekli açık bir makine ve WSGI sunucusu varsayılamıyor.
 
 > **Sonuç:** Bütün mantık istemci tarafında, kullanıcının kendi Excel'inde çalışır.
-> Ortak klasör yalnızca bir dosya deposudur; üzerinde çalışan bir program yoktur.
+> Ağ paylaşımı yalnızca iki dosyanın durduğu yerdir; üzerinde çalışan bir
+> program yoktur.
 
 ### Kısıt 2 — `file://` ile açılan HTML sayfası diske yazamaz
 
@@ -56,136 +63,177 @@ diske yazmasını güvenlik gereği engeller. Sunucu olmadan HTML'in yazma yolu 
 
 ### Kısıt 3 — Aynı dosyaya iki kişi aynı anda yazamaz
 
-Ortak bir `oneriler.xlsx` dosyası olsaydı, ikinci kullanıcı "dosya kilitli"
-uyarısı alırdı. Kilit bekleme, yeniden deneme, kuyruk gibi çözümler sunucusuz
-ortamda güvenilir değildir.
+Bir kullanıcı Excel dosyasını yazma kipinde açtığında dosyayı kilitler.
 
-> **Sonuç — sistemin temel kuralı:** *Kimse ortak bir dosyaya yazmaz.*
-> Her gönderim `yonetim\oneriler\` klasörüne **kendi dosyasını** bırakır. Bir kullanıcı
-> yalnızca kendi oluşturduğu dosyaya dokunur. Çakışma önlenmiş değil,
-> **yapısal olarak imkânsız** hale getirilmiştir.
+Bu kısıtın **iki farklı cevabı** denendi ve ikincisi seçildi.
 
-### Kısıt 4 — VBA içindeki şifre gerçek bir güvenlik sınırı değildir
+*Önceki cevap — kimse ortak dosyaya yazmaz.* Her gönderim `yonetim\oneriler\`
+klasörüne kendi metin dosyasını bırakıyordu; çakışma önlenmiş değil, yapısal
+olarak imkânsızdı. Bedeli, kullanıcının hiç görmediği bir dosya ve klasör
+katmanıydı: yıl klasörleri, kayıt biçimi, yarım dosya koruması, UTF-8
+kodlaması, klasör tarama. Bu katmanın bakımı sistemin geri kalanından fazlaydı
+ve kullanıcı bunu istemedi.
 
-Şifreler kodun içinde durur. VBA proje parolaları ücretsiz araçlarla kırılabilir.
+> **Bugünkü kural:** *Herkes aynı dosyaya, kısa ve dışlayıcı bir işlemle yazar.*
+>
+> ```
+> kilidi al → aç (yazma kipi) → satır ekle → kaydet → kapat → kilidi bırak
+>                                                          ≈ 3 saniye
+> ```
+>
+> Çakışmada **geri çekilinir, rastgele 300–900 ms beklenir, yeniden denenir**;
+> sıra beklemek için bütçe 60, kilit alındıktan sonra yazmak için 20
+> saniyedir. Bütçe dolarsa kullanıcı anlaşılır bir hata görür ve
+> **yazdıkları formda durur.**
 
-> **Sonuç:** Şifreler yalnızca "yanlış ekrana yanlışlıkla girmeyi" engeller.
-> Asıl erişim denetimi **ağ klasörünün NTFS izinleridir**.
+Bu güvence **üç katmandan** oluşur ve üçü de gereklidir. İkisi ölçüm sırasında
+yetersiz çıktığı için eklendi; hangisinin neyi yakaladığı önemlidir.
+
+**1. Kilit dosyası — gerçek karşılıklı dışlama.** Excel'in kendi dosya kilidi
+tek başına **yetmez**, çünkü Excel kaydederken dosyayı yerinde değiştirmez:
+geçici bir dosya yazıp aslının *yerine koyar*. O yer değiştirme anında eski
+dosyanın kilidi bırakılır, yenisininki henüz alınmamıştır. Pencere milisaniyeler
+sürer ama dört taraf aynı anda yazıyorsa yakalanır:
+
+```
+A: aç → en büyük numara = N → satır N+1 → KAYDET ─┐
+B:                        aç (pencere!) ──────────┴→ eski içeriği görür
+B: en büyük numara = N → satır N+1 → KAYDET  → A'nın satırını EZER
+```
+
+Sonuç: bir satır kaybolur ve **aynı numara iki öneriye verilir.** Eşzamanlılık
+testi bunu tam olarak böyle yakaladı: dokuz gönderim, sekiz numara, yirmi sekiz
+satır. Bu yüzden yazmaya başlamadan önce `yonetim\` altında
+`ProjeYonetim.xlsm.kilit` adlı bir dosya **"varsa oluşturma" kipinde** yaratılır
+(`FileSystemObject.CreateTextFile(..., Overwrite:=False)`); bu işlem ağ
+paylaşımlarında da atomiktir. Sıfır baytlık, geçici bir **koordinasyon**
+dosyasıdır — veri taşımaz ve işlem biter bitmez silinir. Sahibi çökerse iki
+dakika sonra bayat sayılıp kaldırılır.
+
+**2. Açılan kitabın `ReadOnly` özelliği.** Dosya başkası tarafından yazma
+kipinde açıkken `Workbooks.Open(..., Notify:=False)` çağrısı, uyarılar
+kapalıyken **hata vermez: dosyayı sessizce salt okunur açar.** Yalnızca hataya
+bakan bir kod, yazdığını sanıp hiçbir şey yazmamış olurdu.
+
+**3. `Save`'in sonucu.** Kaydetme hatası yutulursa satır diske inmediği halde
+çağırana başarı döner; üstelik sonraki yazıcı aynı "en büyük + 1" değerini
+hesaplar. Bu yüzden `Save` asla varsayılmaz, sonucu denetlenir ve başarısızlıkta
+**bütün işlem baştan denenir.**
+
+**Ekip kitabı kilidi tutmaz.** Değerlendirme ekibi Yönetim kitabını gün boyu
+açık tutar. Hiçbir şey yapılmasaydı bu, personelin gün boyu öneri
+gönderememesi demekti. `Workbook_Open` ilk iş olarak `ChangeFileAccess` ile
+kitabı salt okunur kipe alır ve kilidi bırakır; ekran çalışmaya devam eder,
+yalnızca kaydedilemez.
+
+### Kısıt 4 — VBA içindeki parola gerçek bir güvenlik sınırı değildir
+
+Parolalar kodun içinde durur. VBA proje parolaları ücretsiz araçlarla
+kırılabilir.
+
+> **Sonuç:** Ekran şifreleri yalnızca "yanlış ekrana yanlışlıkla girmeyi"
+> engeller. Yönetim kitabının **açılış parolası** ise gerçek bir engeldir ama
+> yalnızca **sıradan personele karşı**: dosyayı kopyalayan biri onu parolasız
+> açamaz, VBA'yı açmayı bilen biri parolayı okur. Tehdit modeli bilinçli
+> olarak budur (madde 8).
 
 ---
 
 ## 4. Nasıl çalışır
 
 ```
-                 PERSONEL                              KAİZEN EKİBİ
-            ProjeOneri.xlsm                      yonetim\ProjeYonetim.xlsm
-                    │                                        │
-         şifre → form → Gönder                      şifre → Önerileri Yenile
-                    │                                        │
-                    ▼                                        │
-        ┌─────────────────────────┐                          │
-        │ yonetim\oneriler\<yıl>\ │ ───────── okur ─────────►│
-        │  PRJ-26A7K.txt          │                          │
-        │  BIRAKMA KUTUSU:        │                          ▼
-        │  yaz evet, oku hayır    │                 değerlendirme yapılır
-        └─────────────────────────┘
-                                                             │
-                                                             ▼
-                                            ┌────────────────────────┐
-                             okur ◄──────── │  degerlendirme\        │
-                                            │   her değişiklik = yeni│
-                                            │   dosya (ekle-only)    │
-                                            └────────────────────────┘
+                 PERSONEL                             KAİZEN EKİBİ
+            ProjeOneri.xlsm                    yonetim\ProjeYonetim.xlsm
+         (NTFS salt okunur, şifresiz)          (açılış parolalı — VERİ BURADA)
+                    │                                       │
+         şifre → form → Gönder                  parola → Pano → Liste
+                    │                                       │
+                    │  kilidi alır, gizli bir Excel         │  Workbook_Open:
+                    │  örneği dosyayı açar, bir satır       │   1) günlük yedek
+                    ▼  ekler, kaydeder, kapatır,            │   2) SALT OKUNURA GEÇ
+        ┌───────────────────────────┐  kilidi bırakır.      │      (kilidi bırakır)
+        │  ProjeYonetim.xlsm        │ ◄─────────────────────┘
+        │   Oneriler  (değişmez)    │   Yenile  → diskten çeker
+        │   Olaylar   (ekle-only)   │   Kaydet  → yeni olay satırı
+        │   Veri / PanoVeri / ekran │
+        └───────────────────────────┘
+                    │
+                    ▼
+        yonetim\yedek\ProjeYonetim_YYYYMMDD.xlsm   (günde bir, son 7)
 ```
 
-**`yonetim\oneriler\` bir bırakma kutusudur.** Personel oraya yazabilir ama
-içini göremez: listeleyemez, kimsenin önerisini okuyamaz, hiçbir dosyayı
-silemez (NTFS izinleri; `KURULUM.md` madde 3). Klasör `yonetim\` içindedir;
-personele o klasör üzerinde yalnızca *geçiş* hakkı verilir, listeleme hakkı
-verilmez. Böylece `projeoneri\` altında görünen tek şey çalışma kitabı ve
-`yonetim\` adıdır; değerlendirme notlarına erişim yoktur.
+**Sistem iki dosyadan ibarettir.** Kayıt dosyası, gelen kutusu, yıl klasörü
+yok. Yanlarında üretilen iki yardımcı dosya vardır ve ikisi de veri taşımaz:
+günlük **yedek kopya** (`yedek\` altında) ve yazma sırasında saniyeden kısa
+süre var olan **kilit dosyası** (`ProjeYonetim.xlsm.kilit`, madde 3).
 
-**Ayrı bir "gelen kutusu" yoktur.** Ara bir tasarımda öneriler önce
-`gelen\` klasörüne bırakılıp okunduktan sonra arşive taşınıyordu. Taşımanın
-tek faydası, izinler yanlış kurulursa açığa çıkacak dosya sayısını
-sınırlamaktı; buna karşılık ikinci bir klasör, bir taşıma adımı ve yeni bir
-hata yolu getiriyordu. İzinler doğru kurulduğunda iki tasarım arasında fark
-olmadığı için tek klasörde birleştirildi: dosya baştan itibaren kalıcı
-yerindedir, sonradan hiçbir yere taşınmaz.
+**Veri Yönetim kitabının içindedir**, iki *çok gizli* sayfada:
 
-**Yazma tek adımlıdır ve iki güvence verir.** Dosya doğrudan son adıyla,
-“varsa oluşturma” kipinde açılır:
+| Sayfa | Ne tutar | Kural |
+|---|---|---|
+| `Oneriler` | Satır başına bir gönderim | **Değişmez.** Yazıldıktan sonra hiç güncellenmez |
+| `Olaylar` | Satır başına bir değerlendirme | **Yalnızca eklenir.** Hiçbir satır silinmez ya da değiştirilmez |
 
-1. *Üzerine yazmaz.* Aynı adda bir dosya varsa işlem başarısız olur ve mevcut
-   dosyaya dokunulmaz; gönderim yeni bir numarayla yeniden denenir.
-2. *Yarım dosya okunmaz.* Kaydın sonuna bir `kayit_sonu=1` satırı yazılır.
-   Yazma yarıda kesilirse bu satır oluşmaz ve okuyucu dosyayı yok sayar.
+Sütunları `Oneriler` için: `sema`, `oneri_no`, `tarih`, `ad_soyad`,
+`sicil_no`, `mevcut_durum`, `oneri_basligi`, `cozum_onerisi`,
+`beklenen_fayda`, `gonderen_bilgisayar`, `gonderen_kullanici`. `Olaylar`
+için: `sema`, `oneri_no`, `olay_tarihi`, `yeni_durum`, `karar_notu`,
+`degerlendiren_kullanici`, `degerlendiren_bilgisayar`.
 
-> **Neden `.tmp` + yeniden adlandırma değil?** İlk tasarım önce `.tmp` yazıp
-> sonra yeniden adlandırıyordu. Yeniden adlandırma, kaynak dosya üzerinde
-> **silme** yetkisi ister — oysa bırakma kutusunda personelin silme yetkisi
-> yoktur ve işletim sistemi işlemi reddeder. Bu, denenerek görüldü
-> (`testler\test_izinler.py`). Dosyayı doğrudan son adıyla oluşturmak aynı iki
-> güvenceyi yalnızca **yazma** yetkisiyle sağlar.
+**Gönderim kaydında `durum` alanı yoktur.** Durum yalnızca olaylardan
+türetilir; aynı bilgi iki yerde tutulmaz.
 
-**Kayıt biçimi** — düz metin, `anahtar=değer`, UTF-8 (BOM'suz):
+**Bütün sütunlar metin biçimlidir.** Aksi halde Excel `10045` sicil numarasını
+sayıya, `2026-09-08T15:34:27` tarihini tarihe çevirir; baştaki sıfırlar ve
+saniye bilgisi sessizce kaybolur. `=` ile başlayan bir metnin formül sanılması
+da böyle engellenir.
 
-```
-sema=3
-oneri_no=PRJ-26A7K
-tarih=2026-09-04T10:11:51
-ad_soyad=...
-sicil_no=...
-mevcut_durum=...
-oneri_basligi=...
-cozum_onerisi=...
-beklenen_fayda=...
-gonderen_bilgisayar=...
-gonderen_kullanici=...
-```
+**Çok satırlı alanlar hücre içi satır sonuyla durur.** Eski tasarımda satır
+sonları `<|>` gibi bir belirtece çevriliyordu, çünkü kayıt tek satırlık metin
+olmak zorundaydı. Hücrede böyle bir kısıt yok; metin olduğu gibi saklanır.
 
-Excel değil düz metin seçildi: bozulmaya karşı dayanıklı, Not Defteri'yle
-okunabilir, kilitlenmez ve gerekirse elle onarılabilir.
+**Yazma neden ayrı, gizli bir Excel örneğinden yapılır.** Üç sebep: (a) Yönetim
+kitabı ekibin ekranında zaten açık olabilir ve aynı dosya aynı Excel örneğinde
+ikinci kez açılamaz; (b) kullanıcının kendi Excel'inin ayarlarına hiç
+dokunulmaz, bir hata olsa bile onun Excel'i bozuk ayarlarla kalmaz; (c) depo
+kitabının `Workbook_Open` kodu `AutomationSecurity` ile tümden kapatılır.
+Bedeli örnek başına yaklaşık bir saniyedir.
 
-**Gönderim kaydında `durum` alanı yoktur.** Gönderim dosyası değişmezdir;
-durum yalnızca değerlendirme olaylarından türetilir. Böylece "tek doğruluk
-kaynağı" sorusu ortadan kalkar: aynı bilgi iki yerde tutulmaz.
+**Öneri numarası `PRJ-2026-0001` biçimindedir.** Sıralı sayaç eskiden
+*imkânsızdı*: ortak bir sayaç dosyası gerektiriyordu ve "kimse ortak dosyaya
+yazmaz" kuralı buna izin vermiyordu. O yüzden numara rastgeleydi (`PRJ-26A7K`).
+Artık yazma zaten dışlayıcı bir kilit altında yapılıyor; sayacı okuyup bir
+artırmak yarışsızdır. Numara hem okunur hem de kaçıncı önerinin geldiğini
+doğrudan gösterir.
 
-**Çok satırlı alanlar** tek satıra sığdırılır: değer içindeki satır sonları
-sabit bir belirtece (`<|>`) çevrilir, okunurken geri açılır. Böylece her alan
-dosyada tam olarak bir satır kaplar ve ayrıştırma basit kalır.
+**Ekle-only güvencesi artık satır sırasından gelir.** Eski tasarımda olayların
+sırası dosya adındaki 10 ms çözünürlüklü zaman damgasından okunuyordu; aynı
+saniyede yazılan iki olayın sırası belirsiz kalabiliyordu. Satırlar yalnızca
+sona eklendiği ve ekleme kilit altında yapıldığı için sıra artık kesindir.
 
-**Kodlama.** Tüm okuma/yazma `ADODB.Stream` üzerinden UTF-8 yapılır. VBA'nın
-yerleşik `Open/Print` komutu dosyayı ANSI yazar; Türkçe karakterler farklı kod
-sayfasına sahip bir makinede bozulurdu.
+**Yönetim kitabı ASLA kaydedilmez.** Ekip kitabı salt okunur açar; ekranda
+yapılan her şey yalnızca bellektedir. Bir kaydetme denemesi iki türlü zarar
+verebilirdi: ya reddedilip kullanıcıyı *Farklı Kaydet*'e yönlendirir ve depo
+ikiye bölünürdü, ya da bellekteki **eski** kopya diskin üzerine yazılır ve o
+arada personelin gönderdiği bütün öneriler silinirdi. `Workbook_BeforeSave`
+kaydetmeyi iptal eder ve nedenini söyler.
 
-**Öneri numarası** `PRJ-YYXXX` biçimindedir; örnek: `PRJ-26A7K`.
-Dokuz karakterdir — telefonda söylenebilsin, elle yazılabilsin, bir kenara not
-edilebilsin diye. Rastgele ekin alfabesinden `0/O` ve `1/I` çıkarılmıştır.
+**Ekran her zaman kitabın kendi kopyasından okur.** *Önerileri Yenile* önce
+diskteki `Oneriler` ve `Olaylar` satırlarını bu kitaba çeker, sonra tabloyu ve
+panoyu baştan kurar. Gizli `Veri` sayfası bu türetmenin sonucudur — bir
+önbellektir, kaynak değildir.
 
-Sıralı numara (`000001`) kullanılamaz — sıralı sayaç ortak bir dosya
-gerektirir, o da Kısıt 3'e takılır. Tarih + rastgele ek, merkezi bir sayaç
-olmadan benzersizliği sağlar. Numara kısaldığı için aynı numaranın iki kez
-üretilme ihtimali doğar; bu yüzden **yazma işlemi hiçbir dosyanın üzerine
-yazmaz.** Hedef dosya varsa yazma başarısız olur ve gönderim yeni bir
-numarayla yeniden denenir. Böylece kısa numara, kayıt kaybı riski getirmeden
-kullanılabilir. Dosya adı öneri numarasının kendisidir.
+**Günlük yedek tek gerçek sigortadır.** Veri tek bir dosyada durduğu için o
+dosyanın silinmesi ya da bozulması her şeyin gitmesi demektir. Kitap her
+açıldığında, günde bir kez, `yonetim\yedek\` altına bayt bayt aynı bir kopya
+alınır ve en yeni yedisi saklanır. Kopya `SaveCopyAs` ile değil **disk
+kopyasıyla** alınır: `SaveCopyAs` bellekteki durumu yazar, disk kopyası ise
+dosyanın aynısıdır ve parolası da yerindedir.
 
-**Olay dosyalarının adı 10 ms çözünürlüklü zaman damgası taşır**
-(`<oneri_no>_<YYYYMMDDHHMMSSss>_<rastgele>.txt`). Olayların sırası
-adlarından okunduğu için saniye çözünürlüğü yetmezdi: aynı saniyede yazılan
-iki olayın sırasını rastgele ek belirler ve durum yanlış türetilebilirdi.
-(Gönderim numarası artık zaman sıralı değildir; liste sıralaması dosya adına
-değil kayıttaki `tarih` alanına bakar.)
-
-**Yıl alt klasörleri** (`oneriler\2026\`) ilk günden kullanılır; klasör başına
-dosya sayısı düşük kalır ve yıllık arşivleme doğal olur.
-
-**Yönetim kitabı tek doğruluk kaynağı değildir.** Ekrandaki her şey `oneriler\` ve
-`degerlendirme\` klasörlerinden yeniden üretilebilir. Kitap silinse, bozulsa
-veya yeniden kurulsa veri kaybolmaz.
-
----
+**Yeniden üretmek veriyi silebilir — bunun bir yolu vardır.** Yönetim kitabı
+artık veri deposu olduğu için `python kur.py` onu boş olarak yeniden üretir.
+Dolu bir kurulumu güncellerken `python kur.py yonetim --veri <mevcut kitap>`
+kullanılır; eski kitaptaki bütün satırlar yenisine taşınır.
 
 ## 5. Değerlendirme modeli
 
@@ -296,15 +344,24 @@ içinde durur, kullanıcının Excel'ine dokunmaz.
 
 | Modül | Sorumluluk |
 |---|---|
-| `modAyar.bas` | Klasör yolları, şifre sabitleri, şema sürümü |
+| `modAyar.bas` | Dosya yolları, ekran şifreleri, **depo parolası**, şema sürümü |
 | `modTasarim.bas` | Renk ve tipografi sabitleri, durum rozetleri |
-| `modDosyaIO.bas` | UTF-8 okuma/yazma, atomik yazma, klasör tarama, OneDrive yol çevirisi |
+| `modDosyaIO.bas` | Yol işlemleri ve OneDrive yol çevirisi (yalnızca bu kaldı) |
+| **`modDepo.bas`** | **Veri deposu: kilit, yeniden deneme, gizli Excel örneği, sıralı numara, günlük yedek** |
 | `modModel.bas` | Değerlendirme modeli: durumlar, PDCA, durum anlamları |
 | `modUI.bas` | Ekran yönetimi, şifre kapısı, koruma, mesajlar, sessiz mod |
-| `modGonderim.bas` | Personel tarafı: form doğrulama, öneri no, gönderim |
-| `modKonsolide.bas` | Klasörleri okuyup olayları tekrar oynatarak tabloyu kurma |
-| `modDegerlendirme.bas` | Değerlendirme ekranı, ekle-only olay kaydı, geçmiş |
+| `modGonderim.bas` | Personel tarafı: form doğrulama, gönderim |
+| `modKonsolide.bas` | Depo sayfalarını okuyup olayları tekrar oynatarak tabloyu kurma |
+| `modDegerlendirme.bas` | Değerlendirme ekranı, ekle-only olay satırı, geçmiş |
 | `modPano.bas` | Göstergeler ve grafik kaynak verisi |
+
+`modDepo` iki kitapta da bulunur: gönderim tarafı da aynı depoya yazar.
+Eşzamanlılığa dair bütün risk tek bir modülde toplanmıştır.
+
+**`modDosyaIO` neden küçüldü:** bir zamanlar sistemin veri katmanıydı —
+UTF-8 akışları, atomik yazma, kayıt biçimi, klasör tarama, zaman damgası.
+Kayıt dosyaları kalkınca hepsi gereksizleşti ve silindi; geriye yalnızca
+OneDrive yol çevirisi ve birkaç yol yardımcısı kaldı.
 
 Sayfa ve `ThisWorkbook` kod-arkası en az düzeyde tutulur (yalnızca olay
 yönlendirme); tüm mantık modüllerde kalır ki `.bas` dosyaları tek kaynak olsun.
@@ -327,12 +384,23 @@ dosya düzenlenir ve `python kur.py` yeniden çalıştırılır.
 kod sayfasına sahip bir makinede bozulurdu. `AddFromString` Unicode üzerinden
 geçer ve kod sayfasından tamamen bağımsızdır.
 
-**Tekrarlanan bilgi denetlenir.** Sistemde bilinçli olarak üç yerde kopya
+**Tekrarlanan bilgi denetlenir.** Sistemde bilinçli olarak dört yerde kopya
 vardır: renkler (`tasarim.py` ↔ `modTasarim.bas`), tablo koordinatları
-(`uret_yonetim.py` ↔ VBA sabitleri) ve doğrulama listeleri (`kur.py` ↔
-`modModel.bas`). Bu kopyaların sessizce birbirinden ayrılması fark edilmesi zor
-hatalara yol açardı; `kur.py` renkleri her üretimde, `test_uretim.py` üçünü
-birden karşılaştırır.
+(`uret_yonetim.py` ↔ VBA sabitleri), doğrulama listeleri (`kur.py` ↔
+`modModel.bas`) ve **depo sütun düzeni** (`uret_yonetim.py` ↔ `modDepo.bas`).
+Sonuncusu en tehlikelisidir: sütunlar sessizce kayarsa gönderim yanlış sütuna
+yazılır ve hiçbir şey hata vermez. `test_uretim.py` her başlığın konumunu
+karşılık gelen `O_*` / `E_*` sabitiyle tek tek karşılaştırır.
+
+**Yönetim kitabı parolayla kaydedilir.** `kur.py` parolayı `modAyar.bas`'tan
+okur; Python tarafında ikinci bir kopya tutulsaydı ikisi sessizce ayrılabilir
+ve üretilen kitap, kodun beklediğinden başka bir parolayla şifrelenebilirdi.
+Aynı sebeple sayfa koruma parolası da oradan okunur.
+
+**Yeniden üretim veriyi silmez — ama komutu doğru vermek gerekir.**
+`python kur.py yonetim --veri <mevcut kitap>` eski kitaptaki `Oneriler` ve
+`Olaylar` satırlarını yenisine taşır. Bu bayrak unutulursa yeni dosya boş
+gelir; dolu bir kurulumda **yedek klasörü son sığınaktır.**
 
 `kur.py` Excel'in "VBA proje nesne modeline erişime güven" ayarını geçici olarak
 açar ve **işi bitince, hata alsa bile, eski haline döndürür**.
@@ -341,87 +409,103 @@ açar ve **işi bitince, hata alsa bile, eski haline döndürür**.
 
 ## 8. Güvenlik — ne gerçek, ne değil
 
-| Katman | Gerçek sınır mı | Not |
-|---|---|---|
-| Personel şifresi | **Hayır** | VBA içinde düz durur |
-| Yönetim şifresi | **Hayır** | VBA içinde düz durur |
-| Sayfa/kitap koruması | **Hayır** | Kazara bozmayı önler |
-| NTFS klasör izinleri | **Evet** | Asıl erişim denetimi budur |
+**Tehdit modeli açıkça şudur: sıradan personel.** Amaç, öneri gönderen bir
+çalışanın başkalarının önerilerini ve değerlendirme notlarını *kazara ya da
+merakla* görmesini engellemektir. Kararlı bir saldırgan, BT yetkisi olan biri
+ya da VBA'yı açmayı bilen biri bu sınırların dışındadır ve tasarım onlara göre
+yapılmamıştır. Bu, kullanıcının bilerek verdiği bir karardır.
 
-Artık `yonetim\` altından dışarı bir dosya üretilmez: rapor ekranı kaldırıldığı
-için sistemin ürettiği her şey izinlerle korunan klasörlerin içinde kalır
-(gerekçesi 5. bölümde).
+| Katman | Gerçek sınır mı | Kime karşı | Not |
+|---|---|---|---|
+| Personel / yönetim ekran şifresi | **Hayır** | — | VBA içinde düz durur |
+| Sayfa ve kitap koruması | **Hayır** | — | Kazara bozmayı önler |
+| **Yönetim kitabının açılış parolası** | **Evet** | Sıradan personel | Dosya AES ile şifrelidir; parolasız açılmaz. Parola VBA'da düz durur |
+| NTFS klasör izinleri | **Kısmen** | Sıradan personel | Yalnızca `yedek\` klasörünü korur |
+
+**Neden gizlilik NTFS'ten parolaya indi.** Veri artık Yönetim kitabının içinde
+ve personelin oraya *yazması* gerekiyor. Excel bir dosyayı **okumadan
+yazamaz**; dolayısıyla personelin o dosya üzerinde okuma hakkı da olmak
+zorundadır. Eski "bırakma kutusu" — yaz evet, oku hayır — bu modelde
+kurulamaz. Yerine dosyanın kendisi şifrelendi.
+
+**Personel neyi görebilir:** `yonetim\` klasörünü ve içindeki dosya adlarını.
+**Neyi göremez:** dosyaların içini. **Neyi yapabilir:** dosyayı kopyalayabilir
+(ama açamaz) ve — teknik olarak — silebilir. Silinmeye karşı koruma yedeklerdir.
+
+**Neden izinler dosyaya değil klasöre verilir.** Excel kaydederken dosyayı
+yerinde değiştirmez: geçici bir dosya yazıp aslının yerine koyar. Dosyaya
+doğrudan verilen açık haklar bu sırada kaybolabilir; klasörden miras alınanlar
+kalır. Ayrıca personelin klasörde dosya oluşturma **ve silme** hakkı olmak
+zorundadır, çünkü Excel'in geçici dosyası ve `~$` sahiplik dosyası orada
+oluşur.
 
 Önerilen izin düzeni (ayrıntısı `KURULUM.md` madde 3):
 
-| Klasör | Kimler | İzin |
+| Klasör / dosya | Tüm personel | Değerlendirme ekibi |
 |---|---|---|
-| `projeoneri\` | Tüm personel | Okuma + Çalıştırma |
-| `ProjeOneri.xlsm` | Tüm personel | **Salt okunur** (yoksa ilk açan kilitler) |
-| `yonetim\` | Tüm personel | **Yalnızca geçiş** — listeleme yok, miras yok |
-| `yonetim\oneriler\` | Tüm personel | **Yalnızca yazma** — listeleme, okuma, silme yok |
-| `yonetim\` içindeki diğer her şey | Yalnızca Değerlendirme ekibi | Tam denetim |
+| `projeoneri\` | Okuma + Çalıştırma | Tam denetim |
+| `ProjeOneri.xlsm` | **Salt okunur** (yoksa ilk açan kilitler) | Tam denetim |
+| `yonetim\` | **Değiştir** (mirasla) | Tam denetim |
+| `yonetim\yedek\` | **Hiçbir hak** (miras kesilir) | Tam denetim |
 
-Bırakma kutusunun **bırakma kutusu** olması kritiktir. Yalnızca silmeyi
-engellemek yetmez: listeleme ve okuma da kapatılmalıdır, aksi halde herkes
-herkesin önerisini okuyabilir.
-
-`yonetim\` üzerindeki geçiş hakkının **miras bayrağı yoktur**; yalnızca o
-klasörün kendisine uygulanır, kardeş klasörlere sızmaz. Yanlış kurulsa bile
-zarar sınırlıdır: geçiş hakkı bir dosyanın içeriğini okumaya yetmez, bunun
-için ayrıca *veri okuma* hakkı gerekir.
-
-**Komut sırası kurulumun en kırılgan noktasıdır:** önce alt klasörler
-ayarlanmalı, `yonetim\` en son kısıtlanmalıdır. Ters sırada izin komutlarının
-kendisi çalışamaz hale gelir ve klasörler sessizce erişilemez kalır — bu
-tasarlanırken bizzat karşılaşılan bir hatadır, `KURULUM.md`'de komutlar
-sırasıyla verilmiştir.
-
-Bu izin modeli `testler\test_izinler.py` ile gerçek NTFS izinleri altında
-sınanır: klasörler kilitlenir, gerçek gönderim makrosu çalıştırılır ve
-gönderimin çalıştığı, buna karşılık yönetim klasörünün listelenemediği,
-değerlendirme notlarının okunamadığı ve üzerlerine yazılamadığı, yönetim
-kitabının okunamadığı, bırakılan önerinin okunamadığı ve silinemediği tek tek
-doğrulanır.
+Bu model `testler	est_izinler.py` ile gerçek NTFS izinleri altında sınanır:
+klasörler kilitlenir, gerçek gönderim makrosu çalıştırılır ve gönderimin
+çalıştığı, kaydetmeden sonra dosyanın hâlâ erişilebilir olduğu (yani izinlerin
+kaydetmeyi atlattığı), buna karşılık yedek klasörünün listelenemediği ve
+üzerine yazılamadığı tek tek doğrulanır.
 
 Salt okunur açılan bir kitabın form olarak kullanılabilmesi Excel'in
 davranışına dayanır: dosya bellekte düzenlenebilir, yalnızca kitabın kendisi
-kaydedilemez. Makronun ortak klasöre yazmasını engellemez.
+kaydedilemez. Makronun yönetim kitabına yazmasını engellemez.
 
 ---
 
 ## 9. Test kapsamı
 
-`python testler\tum_testler.py` — **145'ten fazla kontrol, üç aşamada.**
-Bu bir taklit (mock) testi değildir: üretilen `.xlsm` dosyalarını gerçekten
-Excel'de açar, VBA makrolarını çalıştırır ve sonuçları dosya sisteminden
-doğrular.
+`python testler	um_testler.py` — **250'den fazla kontrol, dört aşamada**,
+yaklaşık dört dakika. Bu bir taklit (mock) testi değildir: üretilen `.xlsm`
+dosyalarını gerçekten Excel'de açar, VBA makrolarını çalıştırır ve sonuçları
+**diskteki gerçek depodan** okur.
 
 | Aşama | Neyi denetler |
 |---|---|
-| `test_uretim.py` | Excel açmadan: dosyalar üretildi mi, VBA projesi var mı, sayfa düzeni ve adlandırılmış aralıklar yerinde mi, **tekrarlanan bilgi ayrışmış mı** |
-| `test_uctan_uca.py` | Gerçek Excel'de: gönderim, konsolidasyon, durum türetme, ekle-only geçmiş, göstergeler, form ve değerlendirme ekranlarının **gerçek düğme yolları** |
-| `test_eszamanlilik.py` | Aynı saniyede 30 gönderim; 3 ayrı süreç ve 3 ayrı Excel örneğiyle paralel gönderim |
-| `test_izinler.py` | `yonetim\` ve `yonetim\oneriler\` klasörlerini **gerçek NTFS izinleriyle** kilitler; gönderimin çalıştığını, buna karşılık listeleme/okuma/silmenin engellendiğini doğrular |
+| `test_uretim.py` | Excel açmadan: dosyalar üretildi mi, yönetim kitabı gerçekten **şifreli** mi ve bilinen parolayla açılıyor mu, sayfa düzeni ve adlandırılmış aralıklar yerinde mi, **tekrarlanan bilgi ayrışmış mı** (özellikle depo sütun düzeni) |
+| `test_uctan_uca.py` | Gerçek Excel'de: gönderim, konsolidasyon, durum türetme, ekle-only geçmiş, göstergeler, form ve değerlendirme ekranlarının **gerçek düğme yolları**, kitabın **gerçek açılışı** (yedek + salt okunura geçiş), kaydetme yasağı, **depo başkasındayken gönderimin anlaşılır hata vermesi** |
+| `test_eszamanlilik.py` | Arka arkaya 20 gönderim; 3 ayrı süreç × 3 gönderim **artı** aynı anda değerlendirme kaydeden bir "ekip" süreci |
+| `test_izinler.py` | `yonetim\` ve `yedek\` klasörlerini **gerçek NTFS izinleriyle** kilitler; gönderimin çalıştığını, kaydetmenin izinleri bozmadığını, yedek klasörünün kapalı kaldığını doğrular |
 
 Özellikle korunan davranışlar: ikinci değerlendirme ilkinin üzerine yazmaz;
-yalnızca durum değiştiren kısmi bir olay önceki karar notunu silmez; yarım
-yazılmış dosya okunmaz; grafikler hiçbir kategoriyi düşürmez.
+yalnızca durum değiştiren kısmi bir olay önceki karar notunu silmez; sahipsiz
+bir olay konsolidasyonu durdurmaz; sıralı numaralar boşluksuz gider ve iki
+öneriye aynı numara verilmez; grafikler hiçbir kategoriyi düşürmez; **arkada
+görünmez bir Excel süreci kalmaz.**
 
-**Testin göremediği — bilinçli sınır:** Testler makroları COM üzerinden çağırır.
-Bu yol Excel'in makro güvenlik ayarını, "İçeriği Etkinleştir" uyarısını ve
-düğmelere basmayı hiç görmez. Yani testler "kod doğru mu" sorusunu yanıtlar,
-"kullanıcı bu dosyayı açtığında ne olur" sorusunu yanıtlamaz. Kurulumdan sonra
-`KURULUM.md` madde 7'deki **elle kontrol listesi şarttır.**
+**Sızıntı kontrolü neden var:** her yazma gizli bir Excel örneği açar.
+Kapatılmayan bir örnek dosya kilidini süresiz tutar ve bir sonraki gönderim
+otuz saniye bekleyip "başkası kullanıyor" der — oysa kimse kullanmıyordur.
+Testler bu yüzden başlangıç ve bitiş `EXCEL.EXE` sayılarını karşılaştırır.
+
+**Testin göremediği — bilinçli sınır:** Testler makroları COM üzerinden
+çağırır. Bu yol Excel'in makro güvenlik ayarını, "İçeriği Etkinleştir"
+uyarısını, parola sorulmasını ve düğmelere basmayı hiç görmez. Yani testler
+"kod doğru mu" sorusunu yanıtlar, "kullanıcı bu dosyayı açtığında ne olur"
+sorusunu yanıtlamaz. Kurulumdan sonra `KURULUM.md` madde 7'deki **elle kontrol
+listesi şarttır.**
 
 **Görünmez diyalog tuzağı.** Görünmez bir Excel'de açılan herhangi bir iletişim
-kutusu — bir `MsgBox`, bir parola sorusu ya da VBA'nın kendi çalışma zamanı
+kutusu — bir `MsgBox`, bir **parola sorusu** ya da VBA'nın kendi çalışma zamanı
 hata penceresi — ekranda görünmez ama makro geri dönmez: otomasyon sessizce
-sonsuza kadar bekler. İki önlem alındı: `modUI` bir **sessiz mod** taşır
-(mesajlar gösterilmek yerine kaydedilir, testler `SonMesaj()` ile okur) ve
-test altyapısı bir **bekçi** çalıştırır (belirli süre dönmeyen makronun adını
-yazıp süreci sonlandırır). Geliştirme sırasında karşılaşılan üç ayrı kilitlenme
-bu yolla adı konmuş hatalara dönüştü.
+sonsuza kadar bekler. Üç önlem alındı: `modUI` bir **sessiz mod** taşır,
+`modDepo` kullanıcıyla hiç konuşmaz ve depoyu **her zaman parolasıyla** açar,
+test altyapısı da bir **bekçi** çalıştırır (belirli süre dönmeyen makronun
+adını yazıp süreci sonlandırır).
+
+**Bekçi bu sürümde gerçek bir kilitlenme yakaladı** ve nedeni öğrenilmeye
+değer: `On Error Resume Next` altında bir `Dir$` döngüsü **sonsuza gidebilir.**
+`Dir$` hata verdiğinde değer döndürmez; atama yapılmadığı için değişken eski
+değerinde kalır ve `Do While Len(ad) > 0` hep doğru olur. Yedek klasörü
+personele kapatıldığı anda tam olarak bu oluyordu. Artık her `Dir$` çağrısından
+sonra `Err` denetleniyor ve ayrıca bir üst sınır var.
 
 **Tasarım gözden geçirmesi.** `python testler\goruntu_al.py` her ekranı örnek
 veriyle doldurup PDF olarak dışa aktarır. Otomatik testler bir ekranın doğru
@@ -437,64 +521,78 @@ Banka BT'si makroları grup ilkesiyle kapattıysa bu sürüm hiç açılmaz. Kur
 sorulması gerekenler: (a) makrolar kullanıcı onayıyla çalışabiliyor mu,
 (b) ağ paylaşımı "Güvenilir Konum" olarak tanımlanabilir mi? Tanımlanmazsa
 sistem yine çalışır, kullanıcı her açılışta *İçeriği Etkinleştir* der.
-Tanımlanırsa hiç uyarı görmez.
 
-**2. Klasör OneDrive/SharePoint ile eşlenmişse**
+**2. Tek dosya = tek kırılma noktası**
+Bütün veri tek bir dosyadadır. O dosya silinirse, bozulursa ya da yanlışlıkla
+üzerine yazılırsa her şey gider. Üç önlem var: günlük yedek, `yedek\`
+klasörünün personele kapalı olması ve kitabın kendisini asla kaydetmemesi.
+**Yine de kurumun düzenli dosya yedeği alması önerilir.**
+
+**3. Ekip kitabı yazma kipinde kalırsa personel gönderemez**
+`ChangeFileAccess` başarısız olursa ya da kullanıcı Excel'in "Yine de Düzenle"
+şeridine basarsa kilit ekipte kalır ve gönderimler otuz saniye bekleyip hata
+verir. Giriş ekranındaki uyarı bandı bu durumun tek görünür işaretidir; bandı
+gören kişi kitabı kapatıp yeniden açmalıdır.
+
+**4. Gizlilik VBA'yı açan birine karşı korumaz**
+Depo parolası `modAyar.bas` içinde düz durur ve üretilen kitapların VBA'sında
+da öyle. Tehdit modeli sıradan personeldir (madde 8).
+
+**5. Her gönderim tam bir dosya yazımıdır**
+Bir satır eklemek dosyanın tamamının yeniden yazılması demektir. Ölçülen süre
+yaklaşık 3 saniyedir ve yazmalar sıraya girer: aynı anda gönderim yapan
+kişi sayısı kadar bu süre beklenebilir. Sıra bekleme bütçesi 60 saniyedir. Ağ
+paylaşımında dosya büyüdükçe bu süre uzar.
+
+**6. Ölçek**
+Birkaç bin satıra kadar sorun beklenmez. On binlere çıkılırsa dosya büyür ve
+her gönderim yavaşlar; o noktada eski yılların satırları bir arşiv kitabına
+taşınmalıdır.
+
+**7. Zorunlu duyarlılık etiketi (MIP) riski**
+Kurum Office'te "duyarlılık etiketi seçmeden kaydedilemez" kuralı
+uyguluyorsa, kaydetme sırasında çıkan etiket penceresi `DisplayAlerts` ile
+bastırılamaz ve **görünmez Excel örneğini kilitler.** BT'ye sorulacak maddeler
+arasına eklenmelidir.
+
+**8. Klasör OneDrive/SharePoint ile eşlenmişse**
 Eşlenmiş klasörlerde Excel dosyanın konumunu disk yolu olarak değil
 `https://...` adresi olarak bildirir; VBA böyle bir adrese yazamaz.
 `modDosyaIO.bas` içindeki `YerelYol()` bu adresi diskteki gerçek klasöre
 çevirir. Ancak Excel'in **Güvenilir Konumlar listesi disk yollarına göre
 çalıştığı için** eşlenmiş klasörlerde güven ayarı beklendiği gibi
 davranmayabilir. **Öneri: çıktıları OneDrive altındaki bir klasörden
-çalıştırmayın.** Testler bu belirsizliği dışarıda bırakmak için `%TEMP%`
-altında — OneDrive dışında — kendi geçici paylaşımını kurar. Gerçek kurulum bir
-UNC ağ paylaşımında olacağı için (`\\sunucu\paylasim\projeoneri`) durum üretimde
-oluşmaz.
+çalıştırmayın.** Gerçek kurulum bir UNC ağ paylaşımında olacağı için
+(`\\sunucu\paylasim\projeoneri`) durum üretimde oluşmaz.
 
-**3. Kişi bazlı yetki yok**
+**9. Kişi bazlı yetki yok**
 Yönetim erişimi tek ortak şifredir. Değerlendirme kaydında hangi Windows
 kullanıcısının yaptığı yazılır, ama şifre paylaşıldığı için bu kimlik doğrulama
 değil, yalnızca iz kaydıdır.
 
-**4. Ölçek**
-`oneriler\` klasörü her yenilemede baştan taranır. Yıl alt klasörleri sayesinde
-birkaç bin dosyaya kadar sorunsuzdur; on binlere çıkılırsa eski yıl
-klasörlerini arşive taşımak yeterlidir.
-
-**5. Anlık bildirim yok**
+**10. Anlık bildirim yok**
 Yeni öneri geldiğinde kimseye haber gitmez. Değerlendirme ekibi kitabı açıp
 *Önerileri Yenile* demelidir.
 
-**6. Excel sürümü**
+**11. Excel sürümü**
 Doğrulanan tek hedef Windows masaüstü Excel'dir (Microsoft 365 / 2019+).
 Excel for Mac ve Excel for the web makroları çalıştırmaz; bu yaklaşım oralarda
 kullanılamaz.
-
-**7. Bu sürümde kapatılan açık madde**
-Önceki sürümde "yönetim kitabındaki düğmeler makro hatası veriyor" diye açık
-bir madde vardı ve nedeninin OneDrive olduğu değerlendiriliyordu. Bu sürümde
-neden bulundu ve giderildi: `ThisWorkbook` modülündeki bir olay imzası yanlış
-yazılmıştı (`Cancel` parametresi `ByVal` olarak tanımlanmıştı; doğrusu `ByRef`).
-Böyle bir hata **derleme** hatasıdır ve `ThisWorkbook` modülü ancak ilk olay
-tetiklendiğinde derlendiği için hiçbir yerde ortaya çıkmaz — ne üretimde, ne
-makroları tek tek çalıştıran testlerde. Kullanıcı ilk kez bir hücreye
-yazdığında ya da çift tıkladığında ham bir Visual Basic hata penceresi olarak
-çıkar. Artık iki kitabın `ThisWorkbook` modülü de bir `DerlemeSinamasi()`
-işlevi taşır ve testler bunu çağırarak modülü derlenmeye zorlar.
 
 ---
 
 ## 11. Sürüm 1 ile karşılaştırma
 
-| | Sürüm 1 (Flask sunucu) | Sürüm 2 (ortak klasör) |
+| | Sürüm 1 (Flask sunucu) | Sürüm 2 (iki Excel dosyası) |
 |---|---|---|
 | Sürekli açık bilgisayar | gerekli | gerekmez |
 | Kullanıcıda kurulum | yok (tarayıcı) | yok (Excel) |
 | Makro izni | gerekmez | **gerekir** |
-| Takip numarası | sıralı `PRJ-2026-000001` | yıl + rastgele `PRJ-26A7K` |
-| Eşzamanlı yazma | sunucu sıraya sokar | yapısal olarak imkânsız |
+| Veri nerede | sunucudaki veritabanı | **Yönetim kitabının içinde** |
+| Takip numarası | sıralı `PRJ-2026-000001` | sıralı `PRJ-2026-0001` |
+| Eşzamanlı yazma | sunucu sıraya sokar | kısa dosya kilidi + yeniden deneme |
 | Anlık bildirim | mümkün | yok |
-| Bakım | sunucu izlenmeli | dosya klasörü yedeklenmeli |
+| Bakım | sunucu izlenmeli | **iki dosya yedeklenmeli** |
 
 Sürüm 1 daha akıcı bir deneyim sunar; Sürüm 2 daha az kurumsal onay gerektirir.
 Karar, bankanın sunucu tahsis edip edemeyeceğine ve makro politikasına bağlıdır.
@@ -505,12 +603,18 @@ Karar, bankanın sunucu tahsis edip edemeyeceğine ve makro politikasına bağl�
 
 | İş | Nasıl |
 |---|---|
-| Şifre / başlık / durum listesi değişikliği | `kaynak\vba\*.bas` ya da `kaynak\tasarim.py` düzenle, `python kur.py` |
+| Şifre / parola / başlık / durum listesi değişikliği | `kaynak\vba\*.bas` ya da `kaynak\tasarim.py` düzenle, `python kur.py` |
 | Ekran veya alan değişikliği | `kaynak\uret_*.py` düzenle, `python kur.py` |
 | Renk veya tipografi değişikliği | `kaynak\tasarim.py` **ve** `modTasarim.bas` birlikte düzenle (kur.py ikisinin aynı kaldığını denetler) |
+| **Dolu bir kurulumu güncelleme** | **`python kur.py yonetim --veri <mevcut ProjeYonetim.xlsm>`** — bayrak unutulursa yeni dosya boş gelir |
 | Doğrulama | `python testler\tum_testler.py` + `KURULUM.md` madde 7'deki elle liste |
 | Tasarım gözden geçirme | `python testler\goruntu_al.py` → ekranların PDF'i |
-| Yedekleme | **Yedeklenmesi gereken `yonetim\` klasörünün tamamıdır** (öneriler ve değerlendirmeler orada). `.xlsm` dosyaları her zaman `kur.py` ile yeniden üretilebilir |
+| **Yedekleme** | **`yonetim\` klasörünün tamamı** — `ProjeYonetim.xlsm` verinin kendisidir |
 
-Yedekleme kuralı önemlidir: çalışma kitapları üretilebilir dosyalardır, veri
-değildir. Verinin tamamı iki klasördeki düz metin dosyalarındadır.
+**Yedekleme kuralı değişti ve önemlidir.** Eski sürümde çalışma kitapları
+üretilebilir dosyalardı, veri değildi; verinin tamamı klasördeki metin
+dosyalarındaydı. **Artık öyle değil:** `ProjeYonetim.xlsm` verinin kendisidir
+ve kaybı geri alınamaz. `ProjeOneri.xlsm` hâlâ üretilebilir bir dosyadır.
+
+Sistemin kendi günlük yedeği (`yonetim\yedek\`) bir kolaylıktır, kurumsal
+yedeğin yerini tutmaz: aynı diskte durur ve yalnızca son yedi günü kapsar.
