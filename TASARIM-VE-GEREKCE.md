@@ -462,8 +462,8 @@ kaydedilemez. Makronun yönetim kitabına yazmasını engellemez.
 
 ## 9. Test kapsamı
 
-`python testler	um_testler.py` — **250'den fazla kontrol, dört aşamada**,
-yaklaşık dört dakika. Bu bir taklit (mock) testi değildir: üretilen `.xlsm`
+`python testler	um_testler.py` — **250'den fazla kontrol, beş aşamada**,
+yaklaşık altı dakika. Bu bir taklit (mock) testi değildir: üretilen `.xlsm`
 dosyalarını gerçekten Excel'de açar, VBA makrolarını çalıştırır ve sonuçları
 **diskteki gerçek depodan** okur.
 
@@ -472,6 +472,7 @@ dosyalarını gerçekten Excel'de açar, VBA makrolarını çalıştırır ve so
 | `test_uretim.py` | Excel açmadan: dosyalar üretildi mi, yönetim kitabı gerçekten **şifreli** mi ve bilinen parolayla açılıyor mu, sayfa düzeni ve adlandırılmış aralıklar yerinde mi, **tekrarlanan bilgi ayrışmış mı** (özellikle depo sütun düzeni) |
 | `test_uctan_uca.py` | Gerçek Excel'de: gönderim, konsolidasyon, durum türetme, ekle-only geçmiş, göstergeler, form ve değerlendirme ekranlarının **gerçek düğme yolları**, kitabın **gerçek açılışı** (yedek + salt okunura geçiş), kaydetme yasağı, **depo başkasındayken gönderimin anlaşılır hata vermesi** |
 | `test_eszamanlilik.py` | Arka arkaya 20 gönderim; 3 ayrı süreç × 3 gönderim **artı** aynı anda değerlendirme kaydeden bir "ekip" süreci |
+| `test_konum.py` | Kitabı **kullanıcının açtığı gibi** (olaylar açık) açar ve aynı akışı **iki konumda** koşturur: OneDrive dışında her şey çalışmalı, OneDrive altında kaydetme beklemeden ve doğru sebeple reddedilmeli |
 | `test_izinler.py` | `yonetim\` ve `yedek\` klasörlerini **gerçek NTFS izinleriyle** kilitler; gönderimin çalıştığını, kaydetmenin izinleri bozmadığını, yedek klasörünün kapalı kaldığını doğrular |
 
 Özellikle korunan davranışlar: ikinci değerlendirme ilkinin üzerine yazmaz;
@@ -555,14 +556,27 @@ uyguluyorsa, kaydetme sırasında çıkan etiket penceresi `DisplayAlerts` ile
 bastırılamaz ve **görünmez Excel örneğini kilitler.** BT'ye sorulacak maddeler
 arasına eklenmelidir.
 
-**8. Klasör OneDrive/SharePoint ile eşlenmişse**
-Eşlenmiş klasörlerde Excel dosyanın konumunu disk yolu olarak değil
-`https://...` adresi olarak bildirir; VBA böyle bir adrese yazamaz.
-`modDosyaIO.bas` içindeki `YerelYol()` bu adresi diskteki gerçek klasöre
-çevirir. Ancak Excel'in **Güvenilir Konumlar listesi disk yollarına göre
-çalıştığı için** eşlenmiş klasörlerde güven ayarı beklendiği gibi
-davranmayabilir. **Öneri: çıktıları OneDrive altındaki bir klasörden
-çalıştırmayın.** Gerçek kurulum bir UNC ağ paylaşımında olacağı için
+**8. Klasör OneDrive/SharePoint ile eşlenmişse — sistem orada ÇALIŞMAZ**
+Bu, sürüm boyunca en pahalıya mal olan tuzak oldu ve ölçülerek anlaşıldı.
+OneDrive ile eşlenen bir klasördeki çalışma kitabı bir Excel örneğinde açık
+olduğu sürece — **salt okunur bile olsa** — ikinci bir Excel süreci onu yazma
+kipinde açamaz. Excel hata vermez, sessizce salt okunur açar.
+
+Yönetim kitabı ekipte her zaman açık olduğu için sonuç şudur: **böyle bir
+klasörde gönderim çalışır ama değerlendirme hiç kaydedilemez.** Aynı klasör
+OneDrive dışındayken aynı işlem sorunsuz çalışır.
+
+Belirti sinsidir: kilit çakışması gibi görünür, kod doğru şekilde yeniden
+dener ve bütçe dolunca "başka bir kullanıcı kullanıyor" der — oysa kimse
+kullanmıyordur. Bu yüzden konum artık **önden** denetlenir
+(`modDepo.DepoOneDriveAltindaMi`): Giriş ekranında uyarı bandı çıkar ve
+kaydetme, beklemeden ve doğru sebeple reddedilir. `testler\test_konum.py` her
+iki konumu da gerçek kullanıcı yoluyla sınar.
+
+İkinci bir sorun daha var: eşlenmiş klasörlerde Excel dosyanın konumunu disk
+yolu olarak değil `https://...` adresi olarak bildirir; `modDosyaIO.YerelYol()`
+bunu çevirir ama Excel'in Güvenilir Konumlar listesi disk yollarına göre
+çalışır. Gerçek kurulum bir UNC ağ paylaşımında olacağı için
 (`\\sunucu\paylasim\projeoneri`) durum üretimde oluşmaz.
 
 **9. Kişi bazlı yetki yok**

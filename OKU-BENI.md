@@ -111,6 +111,7 @@ testler\
   test_uretim.py          Excel açmadan yapısal ve tutarlılık kontrolleri
   test_uctan_uca.py       gerçek Excel'de gerçek makrolar
   test_eszamanlilik.py    paralel süreçlerle çakışma denemesi
+  test_konum.py           gerçek kullanıcı yolu, OneDrive içinde ve dışında
   test_izinler.py         gerçek NTFS izinleriyle doğrulama
   goruntu_al.py           ekranları PDF olarak dışa aktarır (tasarım incelemesi)
 cikti\                    üretilen .xlsm dosyaları
@@ -149,6 +150,10 @@ Aşağıdakiler tasarımı belirleyen, kolayca gözden kaçan noktalardır:
 - **Kilit, Excel örneğinden önce alınır.** Sırasını bekleyen bir yazıcı boşta
   duran gizli bir Excel tutarsa, dört kişi aynı anda gönderdiğinde makine
   onlarca Excel süreciyle tıkanır.
+- **OneDrive ile eşlenen klasörde ikinci süreç yazma izni alamaz.** Kitap bir
+  örnekte açıkken — salt okunur bile olsa — ikinci örnek yazma isteğine salt
+  okunur cevabı alır. Aynı klasör OneDrive dışındayken sorun yoktur. Bu
+  yüzden konum yazmadan önce denetlenir.
 - **Parola her açışta verilmelidir.** Parolası verilmeden açılan şifreli bir
   kitap, görünmez bir Excel'de parola penceresi açar; pencere ekranda görünmez
   ama çağrı geri dönmez. Ölçüldü: 40 saniye sonra hâlâ bekliyordu.
@@ -200,6 +205,11 @@ Aşağıdakiler tasarımı belirleyen, kolayca gözden kaçan noktalardır:
 6. **Kişi bazlı yetki yok.** Yönetim erişimi tek ortak şifredir.
 7. **Anlık bildirim yok.** Değerlendirme ekibi kitabı açıp *Önerileri Yenile*
    demelidir.
+8. **OneDrive ile eşlenen klasörde çalışmaz.** Böyle bir klasörde gönderim
+   çalışır ama değerlendirme hiç kaydedilemez: OneDrive, kitap ekranda açık
+   olduğu sürece dosyayı ikinci bir Excel sürecine yazdırmaz. Sistem bunu
+   tanır ve Giriş ekranında uyarır. Denemek için bile çıktıları OneDrive
+   dışına kopyalayın.
 
 ---
 

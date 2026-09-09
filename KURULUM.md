@@ -42,12 +42,25 @@ olarak açar ve işi bitince — hata alsa bile — eski değerine döndürür. 
 kurum ilkesiyle kilitliyse üretim o makinede yapılamaz; başka bir makinede
 üretip `.xlsm` dosyalarını kopyalamak yeterlidir.
 
-> **Uyarı:** Üretilen dosyaları OneDrive ile eşlenmiş bir klasörden
-> çalıştırmayın. Eşlenmiş klasörlerde Excel dosyanın konumunu disk yolu yerine
-> `https://...` adresi olarak bildirir; kod bunu çevirir ama Excel'in Güvenilir
-> Konumlar listesi disk yollarına göre çalıştığı için güven ayarı beklendiği
-> gibi davranmayabilir. Gerçek kurulum bir UNC paylaşımında olacağı için bu
-> durum üretimde oluşmaz.
+> ### ⚠ Üretilen dosyaları OneDrive ile eşlenmiş bir klasörden ÇALIŞTIRMAYIN
+>
+> Bu bir öneri değil, **kesin bir sınır** ve ölçülerek doğrulandı: OneDrive ile
+> eşlenen bir klasördeki çalışma kitabı bir Excel örneğinde açık olduğu sürece
+> — salt okunur bile olsa — ikinci bir Excel süreci onu **yazma kipinde
+> açamaz.** Excel hata da vermez, sessizce salt okunur açar.
+>
+> Yönetim kitabı ekipte her zaman açık olduğundan, böyle bir klasörde
+> **değerlendirme hiç kaydedilemez.** Gönderim çalışır, değerlendirme
+> çalışmaz. Sistem bu durumu tanır: Giriş ekranında uyarı bandı gösterir ve
+> kaydetme denemesini beklemeden, sebebini söyleyerek reddeder.
+>
+> İkinci bir sebep daha var: eşlenmiş klasörlerde Excel dosyanın konumunu disk
+> yolu yerine `https://...` adresi olarak bildirir; kod bunu çevirir ama
+> Excel'in Güvenilir Konumlar listesi disk yollarına göre çalışır.
+>
+> **Denemek için bile** çıktıları OneDrive dışında bir klasöre kopyalayın
+> (örneğin `C:\projeoneri\`). Gerçek kurulum bir UNC paylaşımında olacağı için
+> bu durum üretimde oluşmaz.
 
 ---
 

@@ -372,7 +372,8 @@ def calistir():
                    "SonSatir", "TabloOku", "AralikDizisi", "OneriNoUret",
                    "SaltOkunuraGec", "SaltOkunurMu", "YedekAl",
                    "KilidiAl", "KilidiBirak", "BayatKilidiTemizle",
-                   "KaydetmeyiDene", "TestDepoSayilari"):
+                   "KaydetmeyiDene", "DepoOneDriveAltindaMi",
+                   "OneDriveAciklamasi", "TestDepoSayilari"):
         s.kontrol(f"modDepo.bas {yordam} tanımlıyor",
                   re.search(rf"(Sub|Function)\s+{yordam}\s*\(", depo) is not None)
 
@@ -395,6 +396,15 @@ def calistir():
     s.kontrol("modDepo.bas içinde MsgBox/InputBox yok",
               not re.search(r"\b(MsgBox|InputBox)\b", depo_kod))
 
+    # OneDrive konumu, ekip tarafinda YAZMADAN ONCE denetlenmeli. Bu kontrol
+    # kaybolursa hata yine olur ama kullanici yirmi saniye bekleyip yaniltici
+    # bir sebep okur -- uretimde tam olarak boyle bulundu.
+    for kapi in ("OlayEkle", "OlayEkleVeCek"):
+        desen = r"Public Function " + kapi + r"\b(.*?)\nEnd Function"
+        govde = re.search(desen, depo, re.DOTALL)
+        s.kontrol(f"modDepo.{kapi} OneDrive konumunu önden denetliyor",
+                  govde is not None and "DepoOneDriveAltindaMi" in govde.group(1))
+
     # Dosya tabanli veri katmani tumden kalkti; kalintisi kalmamali.
     dosyaio = _bas_oku("modDosyaIO.bas")
     olu = [ad for ad in ("UTF8Yaz", "UTF8Oku", "TamKayitYaz", "KayitOku",
@@ -403,6 +413,9 @@ def calistir():
            if re.search(rf"(Sub|Function)\s+{ad}\s*\(", dosyaio)]
     s.kontrol("modDosyaIO'da dosya tabanlı kayıt yordamı kalmadı", not olu,
               ", ".join(olu))
+    s.kontrol("modDosyaIO.bas OneDriveAltindaMi tanımlıyor",
+              re.search(r"Function\s+OneDriveAltindaMi\s*\(", dosyaio)
+              is not None)
 
     # ThisWorkbook_Yonetim: kitabin kendisi asla kaydedilmemeli.
     twy = os.path.join(VBA, "ThisWorkbook_Yonetim.vba")
@@ -414,6 +427,8 @@ def calistir():
     s.kontrol("Açılışta yedek alınıyor", "modDepo.YedekAl" in yonetim_kod)
     s.kontrol("Açılışta salt okunura geçiliyor",
               "modDepo.SaltOkunuraGec" in yonetim_kod)
+    s.kontrol("Açılışta OneDrive konumu uyarılıyor",
+              "DepoOneDriveAltindaMi" in yonetim_kod)
 
     return s.bitir()
 

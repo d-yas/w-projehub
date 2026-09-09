@@ -158,6 +158,49 @@ Public Function YerelYol(ByVal yol As String) As String
     Next kok
 End Function
 
+' ---------------------------------------------------------------------------
+'  OneDriveAltindaMi -- yol, yerel bir OneDrive eslemesinin ALTINDA mi?
+'
+'  Bu bir kolaylik sorusu degil, KULLANILABILIRLIK sorusudur ve olculerek
+'  ogrenildi: OneDrive ile eslenen bir klasordeki calisma kitabi bir Excel
+'  orneginde acik oldugu surece -- SALT OKUNUR bile olsa -- ikinci bir Excel
+'  sureci onu YAZMA kipinde acamiyor. Excel hata da vermiyor, salt okunur
+'  aciyor. Yonetim kitabi ekipte her zaman acik oldugu icin, boyle bir
+'  klasorde degerlendirme HIC kaydedilemez.
+'
+'  Ayni klasor OneDrive disindayken ayni islem sorunsuz calisiyor.
+' ---------------------------------------------------------------------------
+Public Function OneDriveAltindaMi(ByVal yol As String) As Boolean
+    Dim kok As Variant
+    Dim temiz As String, k As String
+
+    On Error GoTo Cikis
+
+    temiz = YolTemizle(yol)
+    If Len(temiz) = 0 Then Exit Function
+
+    For Each kok In OneDriveKokleri()
+        k = YolTemizle(CStr(kok))
+        If Len(k) > 0 And Len(temiz) >= Len(k) Then
+            If StrComp(Left$(temiz, Len(k)), k, vbTextCompare) = 0 Then
+                ' Karsilastirma YOL SINIRINDA yapilmali. Duz bir onek
+                ' karsilastirmasi "...\OneDriveYedek" klasorunu de
+                ' "...\OneDrive" altinda sanardi ve sistem calisabilecegi bir
+                ' yerde kendini gereksiz yere kilitlerdi.
+                If Len(temiz) = Len(k) Then
+                    OneDriveAltindaMi = True
+                    Exit Function
+                ElseIf Mid$(temiz, Len(k) + 1, 1) = "\" Then
+                    OneDriveAltindaMi = True
+                    Exit Function
+                End If
+            End If
+        End If
+    Next kok
+
+Cikis:
+End Function
+
 ' Ortam degiskenlerinden ve kullanici profilinden olasi OneDrive koklerini toplar.
 Private Function OneDriveKokleri() As Collection
     Dim c As New Collection

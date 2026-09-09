@@ -178,6 +178,40 @@ End Function
 
 
 ' ###########################################################################
+'  KURULUM KONUMU -- OneDrive ile eslenen klasorde YAZMA calismaz
+'
+'  Olculerek bulundu: OneDrive ile eslenen bir klasordeki kitap bir Excel
+'  orneginde acik oldugu surece -- salt okunur bile olsa -- ikinci bir Excel
+'  sureci onu yazma kipinde acamiyor. Excel hata vermiyor, sessizce salt
+'  okunur aciyor; DepoAc bunu dogru sekilde catisma sayip yeniden deniyor ve
+'  butce dolunca "baskasi kullaniyor" diyor. Oysa kimse kullanmiyor: konum
+'  yanlis.
+'
+'  Ekip kitabi ekranda HER ZAMAN acik oldugu icin, boyle bir klasorde
+'  degerlendirme HIC kaydedilemez. O yuzden yirmi saniye beklemek yerine
+'  DURUM ADIYLA soylenir. Gonderim tarafi engellenmez: personelin Excel'inde
+'  yonetim kitabi acik olmadigi icin gonderim orada da calisir.
+' ###########################################################################
+
+Public Function DepoOneDriveAltindaMi() As Boolean
+    On Error Resume Next
+    DepoOneDriveAltindaMi = modDosyaIO.OneDriveAltindaMi(modAyar.YonetimKitapYolu())
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+Public Function OneDriveAciklamasi() As String
+    OneDriveAciklamasi = _
+        "Bu kurulum OneDrive ile eşlenen bir klasörde duruyor ve orada " & _
+        "değerlendirme kaydedilemez." & vbCrLf & vbCrLf & _
+        "OneDrive, yönetim kitabı ekranda açık olduğu sürece dosyayı başka " & _
+        "hiçbir işleme yazdırmıyor." & vbCrLf & vbCrLf & _
+        "Çözüm: kurulumu OneDrive dışına, tercihen ağ paylaşımına taşıyın " & _
+        "(bkz. KURULUM.md madde 1)."
+End Function
+
+
+' ###########################################################################
 '  DIS KAPI -- her biri kendi gizli Excel ornegini acar ve kapatir
 ' ###########################################################################
 
@@ -212,6 +246,12 @@ End Function
 Public Function OlayEkle(ByVal sozluk As Object) As Long
     Dim app As Object, hataMetni As String, aciklama As String
 
+    ' Yirmi saniye bekleyip yaniltici bir mesaj vermek yerine, durumu adiyla
+    ' soyle (bkz. DepoOneDriveAltindaMi).
+    If DepoOneDriveAltindaMi() Then
+        Err.Raise vbObjectError + 946, "modDepo.OlayEkle", OneDriveAciklamasi()
+    End If
+
     If Not KilidiAl(aciklama, AZAMI_KILIT_SN) Then
         Err.Raise vbObjectError + 948, "modDepo.OlayEkle", aciklama
     End If
@@ -236,6 +276,10 @@ End Function
 Public Function OlayEkleVeCek(ByVal sozluk As Object, _
                               ByVal hedefKitap As Object) As Long
     Dim app As Object, hataMetni As String, aciklama As String
+
+    If DepoOneDriveAltindaMi() Then
+        Err.Raise vbObjectError + 946, "modDepo.OlayEkleVeCek", OneDriveAciklamasi()
+    End If
 
     If Not KilidiAl(aciklama, AZAMI_KILIT_SN) Then
         Err.Raise vbObjectError + 947, "modDepo.OlayEkleVeCek", aciklama

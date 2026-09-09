@@ -30,9 +30,20 @@ Private Sub Workbook_Open()
     modUI.KorumalariKur
     modUI.OturumKapat
 
-    ' Kilit birakilamadiysa personel gonderim yapamaz ve bunu kimse fark
-    ' etmez. Giris ekranindaki bant, sorunu ekibin gorecegi tek yerdir.
-    If Not modDepo.SaltOkunurMu() Then
+    ' Giris ekranindaki bant, kurulumla ilgili iki sorunun gorulecegi TEK
+    ' yerdir. Ikisi de sessizdir: kullanici ancak kaydetmeye calisinca fark
+    ' eder ve o zaman da neden oldugunu anlamaz.
+    '
+    ' 1) YANLIS KONUM. OneDrive ile eslenen bir klasorde degerlendirme HIC
+    '    kaydedilemez (bkz. modDepo.DepoOneDriveAltindaMi). Bunu, ekip bir
+    '    degerlendirme yazmadan ONCE soylemek gerekir.
+    ' 2) KILIT BIRAKILAMADI. O zaman personel oneri gonderemez.
+    If modDepo.DepoOneDriveAltindaMi() Then
+        modUI.BantYaz ThisWorkbook.Worksheets(modUI.SAYFA_GIRIS), "giris_bant", _
+            "⚠  Bu kurulum OneDrive ile eşlenen bir klasörde. " & _
+            "Değerlendirme KAYDEDİLEMEZ; kurulumu OneDrive dışına taşıyın.", _
+            modTasarim.CLR_UYARI_ZEMIN, modTasarim.CLR_UYARI_YAZI
+    ElseIf Not modDepo.SaltOkunurMu() Then
         modUI.BantYaz ThisWorkbook.Worksheets(modUI.SAYFA_GIRIS), "giris_bant", _
             "⚠  Bu kitap yazma kipinde açıldı. Kapatıp yeniden açın; " & _
             "aksi halde personel öneri gönderemez.", _

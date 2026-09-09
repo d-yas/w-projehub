@@ -106,11 +106,21 @@ Hata:
     hataMetni = "Hata " & Err.Number & ": " & Err.Description
     DurumCubugu ""
     modUI.HizliModKapa
-    modUI.Hata "Değerlendirme kaydedilemedi." & vbCrLf & vbCrLf & hataMetni & _
-               vbCrLf & vbCrLf & _
-               "Yönetim kitabına o anda başka biri yazıyor olabilir; " & _
-               "birkaç saniye sonra yeniden deneyin. Yazdıklarınız ekranda " & _
-               "duruyor.", "Kayıt hatası"
+
+    ' Kuyruk NEDENE gore secilir. "Birkaç saniye sonra yeniden deneyin"
+    ' demek, sorun kurulum konumuysa yaniltici olur: orada bekleyerek hicbir
+    ' sey duzelmez ve kullanici defalarca dener.
+    If modDepo.DepoOneDriveAltindaMi() Then
+        modUI.Hata "Değerlendirme kaydedilemedi." & vbCrLf & vbCrLf & _
+                   modDepo.OneDriveAciklamasi() & vbCrLf & vbCrLf & _
+                   "Yazdıklarınız ekranda duruyor.", "Kayıt hatası"
+    Else
+        modUI.Hata "Değerlendirme kaydedilemedi." & vbCrLf & vbCrLf & hataMetni & _
+                   vbCrLf & vbCrLf & _
+                   "Yönetim kitabına o anda başka biri yazıyor olabilir; " & _
+                   "birkaç saniye sonra yeniden deneyin. Yazdıklarınız " & _
+                   "ekranda duruyor.", "Kayıt hatası"
+    End If
 End Sub
 
 ' Bir hata isleyicisi icinden de cagrildigi icin tamamen hataya dayanikli.

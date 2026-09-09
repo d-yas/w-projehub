@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import test_eszamanlilik
 import test_izinler
+import test_konum
 import test_uctan_uca
 import test_uretim
 import yardimci as y
@@ -27,6 +28,7 @@ def main():
         ("Üretim", test_uretim.calistir),
         ("Uçtan uca", test_uctan_uca.calistir),
         ("Eşzamanlılık", test_eszamanlilik.calistir),
+        ("Konum", test_konum.calistir),
         ("İzinler", test_izinler.calistir),
     ]
 
