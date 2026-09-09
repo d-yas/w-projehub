@@ -8,8 +8,8 @@ TESTIN GOREMEDIGI (bilincli sinir):
 Makrolar COM uzerinden cagrilir. Bu yol Excel'in makro guvenlik ayarini,
 "Icerigi Etkinlestir" uyarisini ve dugmelerin gorsel yerlesimini HIC gormez.
 Yani burasi "kod dogru mu" sorusunu yanitlar, "kullanici bu dosyayi actiginda
-ne olur" sorusunu yanitlamaz. Kurulumdan sonra KURULUM.md'deki elle kontrol
-listesi mutlaka bir kez uygulanmalidir.
+ne olur" sorusunu yanitlamaz. Kurulumdan sonra TALIMATNAME.md madde 6'daki elle
+kontrol listesi mutlaka bir kez uygulanmalidir.
 
     python testler\test_uctan_uca.py
 """

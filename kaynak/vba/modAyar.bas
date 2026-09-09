@@ -11,7 +11,7 @@ Option Explicit
 '  gizliligin ASIL siniridir. Personel dosyayi kopyalayabilir ama parolasiz
 '  acamaz. Tehdit modeli SIRADAN PERSONELDIR: parola bu kaynakta ve uretilen
 '  kitaplarin VBA'sinda duz durur, yani VBA'yi acmayi bilen biri onu okur.
-'  Bu bilincli bir sinirdir (bkz. TASARIM-VE-GEREKCE.md madde 8).
+'  Bu bilincli bir sinirdir.
 ' ============================================================================
 
 Public Const SEMA_SURUMU As String = "4"

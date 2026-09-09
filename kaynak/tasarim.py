@@ -71,7 +71,7 @@ FONT_BASLIK_AILE = "Segoe UI Semibold"
 #
 #  Her sayfanin ustundeki lacivert bantta solda yazar. Kendi biriminizin
 #  adini yazip "python kur.py" calistirin; butun ekranlarda degisir.
-#  (Ekran sifreleri icin: kaynak/vba/modAyar.bas -- KURULUM.md madde 5.)
+#  (Ekran sifreleri icin: kaynak/vba/modAyar.bas -- TALIMATNAME.md madde 1.)
 # ==========================================================================
 BIRIM_ADI = "XJ Birimi"
 

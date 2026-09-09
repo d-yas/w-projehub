@@ -10,7 +10,7 @@ ZORUNDA. Bunun uc sonucu var ve ucu de bilincli kabul edilmistir:
   1) Gizliligin siniri artik NTFS degil, dosyanin ACILIS PAROLASIDIR.
      Personel dosyayi kopyalayabilir ama parolasiz acamaz. Tehdit modeli
      siradan personeldir; parolayi VBA'dan cikarabilecek biri icin bu bir
-     sinir degildir (bkz. TASARIM-VE-GEREKCE.md madde 8).
+     sinir degildir.
 
   2) Izinler DOSYAYA degil KLASORE, mirasla verilir. Excel kaydederken
      dosyayi yerinde degistirmez; gecici bir dosya yazip aslinin yerine

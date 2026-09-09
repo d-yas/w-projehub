@@ -61,8 +61,8 @@ def main():
     print()
     print("Hatırlatma: bu testler makroları COM üzerinden çağırır; Excel'in")
     print("makro güvenlik ayarını, parola sorulmasını ve düğmelere basmayı")
-    print("GÖREMEZLER. Kurulumdan sonra KURULUM.md'deki elle kontrol")
-    print("listesini uygulayın.")
+    print("GÖREMEZLER. Kurulumdan sonra TALIMATNAME.md madde 6'daki elle")
+    print("kontrol listesini uygulayın.")
     return 0
 
 

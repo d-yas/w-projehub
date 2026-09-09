@@ -258,7 +258,7 @@ def uret(secilenler, veri_kaynagi=None):
     for t in tanimlar:
         print(f"  ✓ {os.path.relpath(t['hedef'], KOK)}")
     print()
-    print("  Kurulum için KURULUM.md dosyasına bakın.")
+    print("  Kurulum için TALIMATNAME.md dosyasına bakın.")
     print("  Uyarı: çıktıları OneDrive ile eşlenmiş bir klasörden çalıştırmayın.")
 
 

@@ -207,7 +207,7 @@ Public Function OneDriveAciklamasi() As String
         "OneDrive, yönetim kitabı ekranda açık olduğu sürece dosyayı başka " & _
         "hiçbir işleme yazdırmıyor." & vbCrLf & vbCrLf & _
         "Çözüm: kurulumu OneDrive dışına, tercihen ağ paylaşımına taşıyın " & _
-        "(bkz. KURULUM.md madde 1)."
+        "(bkz. TALIMATNAME.md madde 2)."
 End Function
 
 
