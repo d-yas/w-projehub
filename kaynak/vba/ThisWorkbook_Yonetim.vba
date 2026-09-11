@@ -40,12 +40,12 @@ Private Sub Workbook_Open()
     ' 2) KILIT BIRAKILAMADI. O zaman personel oneri gonderemez.
     If modDepo.DepoOneDriveAltindaMi() Then
         modUI.BantYaz ThisWorkbook.Worksheets(modUI.SAYFA_GIRIS), "giris_bant", _
-            "⚠  Bu kurulum OneDrive ile eşlenen bir klasörde. " & _
+            modTasarim.IsaretUyari() & "  Bu kurulum OneDrive ile eşlenen bir klasörde. " & _
             "Değerlendirme KAYDEDİLEMEZ; kurulumu OneDrive dışına taşıyın.", _
             modTasarim.CLR_UYARI_ZEMIN, modTasarim.CLR_UYARI_YAZI
     ElseIf Not modDepo.SaltOkunurMu() Then
         modUI.BantYaz ThisWorkbook.Worksheets(modUI.SAYFA_GIRIS), "giris_bant", _
-            "⚠  Bu kitap yazma kipinde açıldı. Kapatıp yeniden açın; " & _
+            modTasarim.IsaretUyari() & "  Bu kitap yazma kipinde açıldı. Kapatıp yeniden açın; " & _
             "aksi halde personel öneri gönderemez.", _
             modTasarim.CLR_UYARI_ZEMIN, modTasarim.CLR_UYARI_YAZI
     End If

@@ -98,7 +98,7 @@ Public Sub DegerlendirmeKaydet()
     OneriyiAc no                                  ' gecmis listesi tazelensin
 
     modUI.BantYaz ws, "dg_bant", _
-        "✓  Değerlendirme kaydedildi  ·  " & Format$(Now, "dd.mm.yyyy hh:nn"), _
+        modTasarim.IsaretOnay() & "  Değerlendirme kaydedildi  ·  " & Format$(Now, "dd.mm.yyyy hh:nn"), _
         modTasarim.CLR_ONAY_ZEMIN, modTasarim.CLR_ONAY_YAZI
     Exit Sub
 

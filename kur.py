@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 r"""Proje Öneri Sistemi -- üretim betiği.
 
-    python kur.py            iki kitabı da üretir
+    python kur.py            üç kitabı da üretir
     python kur.py oneri      yalnızca ProjeOneri.xlsm
+    python kur.py takip      yalnızca ProjeTakip.xlsm
     python kur.py yonetim    yalnızca ProjeYonetim.xlsm
 
     python kur.py yonetim --veri "\\sunucu\...\yonetim\ProjeYonetim.xlsm"
@@ -199,7 +200,41 @@ def yonetim_tanimi(veri_kaynagi=None):
     }
 
 
-TANIMLAR = {"oneri": oneri_tanimi, "yonetim": yonetim_tanimi}
+def takip_tanimi(veri_kaynagi=None):
+    import uret_takip
+
+    taslak = os.path.join(CIKTI, "_taslak_takip.xlsx")
+    hedef = os.path.join(CIKTI, "ProjeTakip.xlsm")
+    return {
+        "ad": "ProjeTakip.xlsm",
+        "taslak": taslak,
+        "hedef": hedef,
+        "uret": lambda: uret_takip.kitap_uret(taslak),
+        # modDepo depoyu OKUMAK icin girer; kitap parolasizdir ve depo sayfasi
+        # tasimaz (bkz. modTakip). modModel durum kuralini ve anlamlarini verir.
+        "moduller": _bas("modTasarim", "modAyar", "modDosyaIO", "modModel",
+                         "modUI", "modDepo", "modTakip"),
+        "thisworkbook": _thisworkbook("ThisWorkbook_Takip.vba"),
+        "dugmeler": [
+            {"sayfa": uret_takip.SAYFA_TAKIP,
+             "hucre": uret_takip.DUGME_YERLERI["sorgula"],
+             "metin": "Sorgula  →", "makro": "Sorgula",
+             "varyant": "birincil"},
+            {"sayfa": uret_takip.SAYFA_TAKIP,
+             "hucre": uret_takip.DUGME_YERLERI["temizle"],
+             "metin": "Temizle", "makro": "Temizle",
+             "varyant": "ikincil",
+             "sol_kaydir": uret_takip.DUGME_KAYDIR["temizle"]},
+        ],
+        "ek_islem": None,
+        "dosya_sifresi": None,
+        "veri_kaynagi": None,
+        "veri_sayfalari": (),
+    }
+
+
+TANIMLAR = {"oneri": oneri_tanimi, "yonetim": yonetim_tanimi,
+            "takip": takip_tanimi}
 
 
 # ==========================================================================
@@ -277,7 +312,7 @@ def main():
 
     argumanlar = [a.lower() for a in ham if not a.startswith("-")]
     if not argumanlar:
-        secilenler = ["oneri", "yonetim"]
+        secilenler = list(TANIMLAR)
     else:
         bilinmeyen = [a for a in argumanlar if a not in TANIMLAR]
         if bilinmeyen:

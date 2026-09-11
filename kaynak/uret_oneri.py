@@ -64,8 +64,9 @@ def _giris_sayfasi(wb):
     u.bosluk(ws, 12, 14.0)
     u.bilgi_kutusu(
         ws, 13, C_ETIKET, 13, C_ALAN_SON,
-        "Gönderim sonrasında size bir öneri numarası verilir; "
-        "önerinizin durumunu bu numarayla sorabilirsiniz.",
+        "Gönderim sonrasında size bir öneri numarası verilir; önerinizin "
+        "durumunu bu numara ve sicil numaranızla ProjeTakip dosyasından "
+        "sorgulayabilirsiniz.",
     )
     ws.row_dimensions[13].height = 36.0
 

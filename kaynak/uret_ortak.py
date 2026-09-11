@@ -239,6 +239,32 @@ def form_alani(ws, wb, satir, c1, c2, ad, sayfa_adi, yukseklik=None,
     return h
 
 
+def okuma_alani(ws, wb, sayfa_adi, satir, etiket_sutun, etiket_metni, ad, c1, c2,
+                yukseklik=None, coklu=False):
+    """Salt okunur bilgi alani.
+
+    Giris alanlarindan bilerek FARKLI gorunur: beyaz kutusu YOKTUR, zeminde
+    durur ve altinda ince bir cizgi vardir. "Buraya yazamazsin" bilgisi kilit
+    uyarisiyla degil gorunumle verilir; beyaz yuzey yalnizca yazilabilir
+    alanlara ayrilmistir.
+    """
+    e = etiket(ws, satir, etiket_sutun, etiket_metni)
+    if coklu:
+        e.alignment = hiza("left", "top")
+    ws.row_dimensions[satir].height = yukseklik or 24.0
+
+    h = birlestir(ws, satir, c1, satir, c2)
+    h.font = yazi(RENK["METIN_KOYU"], PT["GOVDE"], kalin=not coklu)
+    h.alignment = hiza("left", "top" if coklu else "center",
+                       kaydir=coklu, girinti=1)
+    for c in range(c1, c2 + 1):
+        ws.cell(row=satir, column=c).border = Border(bottom=kenar(RENK["CIZGI_GRI"]))
+    wb.defined_names.add(
+        DefinedName(ad, attr_text=f"'{sayfa_adi}'!${get_column_letter(c1)}${satir}")
+    )
+    return h
+
+
 def ipucu_satiri(ws, satir, c1, c2, metin):
     ws.row_dimensions[satir].height = 14.0
     h = birlestir(ws, satir, c1, satir, c2)

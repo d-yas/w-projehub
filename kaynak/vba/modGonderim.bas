@@ -43,7 +43,7 @@ Public Sub OneriGonder()
     Set sozluk = FormdanOku(ws)
     hataMetni = Dogrula(sozluk)
     If Len(hataMetni) > 0 Then
-        modUI.BantYaz ws, "frm_bant", "⚠  " & hataMetni, _
+        modUI.BantYaz ws, "frm_bant", modTasarim.IsaretUyari() & "  " & hataMetni, _
                       modTasarim.CLR_UYARI_ZEMIN, modTasarim.CLR_UYARI_YAZI
         modUI.Hata hataMetni, "Eksik bilgi"
         Exit Sub
@@ -55,18 +55,19 @@ Public Sub OneriGonder()
 
     FormuTemizle
     modUI.BantYaz ws, "frm_bant", _
-        "✓  Öneriniz alındı.  Öneri numaranız: " & oneriNo, _
+        modTasarim.IsaretOnay() & "  Öneriniz alındı.  Öneri numaranız: " & oneriNo, _
         modTasarim.CLR_ONAY_ZEMIN, modTasarim.CLR_ONAY_YAZI
 
     modUI.Bilgi "Öneriniz başarıyla gönderildi." & vbCrLf & vbCrLf & _
                 "Öneri numaranız:" & vbCrLf & oneriNo & vbCrLf & vbCrLf & _
-                "Bu numarayı not almanız, önerinizin durumunu sormak " & _
-                "istediğinizde işinizi kolaylaştırır.", _
+                "Bu numarayı not alın: önerinizin durumunu ProjeTakip " & _
+                "dosyasından bu numara ve sicil numaranızla " & _
+                "sorgulayabilirsiniz.", _
                 "Gönderim tamamlandı"
     Exit Sub
 
 Hata:
-    modUI.BantYaz ws, "frm_bant", "⚠  Gönderim yapılamadı.", _
+    modUI.BantYaz ws, "frm_bant", modTasarim.IsaretUyari() & "  Gönderim yapılamadı.", _
                   modTasarim.CLR_UYARI_ZEMIN, modTasarim.CLR_UYARI_YAZI
     modUI.Hata "Öneriniz kaydedilemedi." & vbCrLf & vbCrLf & _
                Err.Description & vbCrLf & vbCrLf & _

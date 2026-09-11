@@ -37,6 +37,7 @@ def calistir():
             _degerlendirme(s, app, o)
             _gostergeler(s, app, o)
             _degerlendirme_ekrani(s, app, o)
+            _takip(s, app, o)
             _form_ekrani(s, app, o)
             _kitap_kaydedilmez(s, app, o)
             _yedek(s, app, o)
@@ -385,6 +386,108 @@ def _ekrana_yaz(ws, degerler):
 
 
 # ==========================================================================
+#  5b. Takip ekrani -- personelin kendi onerisini sorgulamasi
+#
+#  Takip kitabi PAROLASIZDIR: depo oraya kopyalanmaz, yalnizca sorgulanan
+#  onerinin satirlari gelir. Numaralar sirali ve tahmin edilebilir oldugu
+#  icin sicil de tutmalidir; ekibin karar notlari oneri sahibine gosterilmez.
+#
+#  Bu noktada birinci oneri Planlandı -> Pilot Uygulamada -> Ölçümleniyor
+#  gecmisine, ucuncusu gerekceli bir Reddedildi'ye sahiptir.
+# ==========================================================================
+def _takip(s, app, o):
+    print("  · takip ekranı (Sorgula / Temizle düğmeleri)")
+
+    with y.kitap(app, o.takip_kitap, salt_okunur=True) as wb:
+        s.kontrol("Takip kitabının ThisWorkbook modülü derleniyor",
+                  y.derleme_sinamasi(app, wb))
+        s.esit("Takip kitabı veri deposunu buluyor",
+               os.path.normcase(o.yonetim_kitap),
+               os.path.normcase(y.calistir(app, wb, "modAyar.YonetimKitapYolu")))
+        s.kontrol("Takip kitabında depo sayfası yok",
+                  not ({"Oneriler", "Olaylar", "Veri"}
+                       & {w.Name for w in wb.Worksheets}))
+
+        ws = wb.Worksheets("Takip")
+
+        # Numara kucuk harfle ve bosluklu yazilir; kullanicilar boyle yazar.
+        _sorgula(app, wb, ws, f"  {o.no1.lower()} ", "10045")
+        s.esit("Numara + sicil ile sorgu hatasız", "", y.son_mesaj(app, wb))
+        s.esit("Küçük harfle yazılan numara bulundu", o.no1,
+               _hucre(ws, "tk_sonuc_no"))
+        s.esit("Güncel durum listedekiyle aynı", "Ölçümleniyor",
+               _hucre(ws, "tk_durum"))
+        s.kontrol("Öneri başlığı gösterildi",
+                  "Sıra yönetimi" in _hucre(ws, "tk_baslik"), _hucre(ws, "tk_baslik"))
+        s.kontrol("Gönderim tarihi okunur biçimde (gg.aa.yyyy)",
+                  re.fullmatch(r"\d{2}\.\d{2}\.\d{4}", _hucre(ws, "tk_tarih"))
+                  is not None, _hucre(ws, "tk_tarih"))
+        s.kontrol("Onay bandı yazıldı ve işareti bozulmadı (✓, '?' değil)",
+                  _hucre(ws, "tk_bant").startswith("✓")
+                  and "bulundu" in _hucre(ws, "tk_bant"), _hucre(ws, "tk_bant"))
+
+        gecmis = [str(ws.Cells(r, 3).Value or "") for r in range(31, 41)]
+        s.esit("Durum geçmişi değişiklikleri en yeniden eskiye gösteriyor",
+               ["Ölçümleniyor", "Pilot Uygulamada", "Planlandı", "Yeni"],
+               [g for g in gecmis if g])
+        s.kontrol("Geçmişin her satırında durumun anlamı var",
+                  all(str(ws.Cells(r, 4).Value or "") for r in range(31, 35)))
+        metin = _sayfa_metni(ws)
+        s.kontrol("Karar notları takip ekranında görünmüyor",
+                  not any(n in metin for n in ("Şube müdürüyle", "Pilot sonuçları")))
+
+        # Yanlis sicil ile olmayan numara AYNI cevabi almali; aksi halde ekran
+        # hangi numaralarin var oldugunu ele verir.
+        _sorgula(app, wb, ws, o.no1, "99999")
+        yanlis_sicil = y.son_mesaj(app, wb)
+        s.kontrol("Yanlış sicil ile sonuç gösterilmedi",
+                  yanlis_sicil.startswith("hata:") and not _hucre(ws, "tk_durum"),
+                  yanlis_sicil)
+        s.esit("Önceki sorgunun sonucu ekrandan silindi", "",
+               _hucre(ws, "tk_sonuc_no"))
+        s.esit("Önceki sorgunun geçmişi ekrandan silindi", "",
+               str(ws.Cells(31, 3).Value or ""))
+
+        _sorgula(app, wb, ws, f"PRJ-{y.yil()}-9999", "10045")
+        s.esit("Olmayan numara ile yanlış sicil aynı mesajı alıyor",
+               yanlis_sicil, y.son_mesaj(app, wb))
+
+        # Gerekce depoda var ama oneri sahibine gosterilmez.
+        _sorgula(app, wb, ws, o.no3, "10047")
+        s.esit("Reddedilen öneri sorgulandı", "Reddedildi", _hucre(ws, "tk_durum"))
+        s.kontrol("Ret gerekçesi takip ekranında görünmüyor",
+                  "Mevzuat" not in _sayfa_metni(ws))
+
+        _sorgula(app, wb, ws, o.no2, "")
+        mesaj = y.son_mesaj(app, wb)
+        s.kontrol("Sicil boşken sorgu yapılmadı",
+                  mesaj.startswith("hata:") and "sicil" in mesaj, mesaj)
+
+        _sorgula(app, wb, ws, o.no2, "10046")
+        y.calistir(app, wb, "modTakip.Temizle")
+        s.esit("Temizle düğmesi hata vermedi", "", y.son_mesaj(app, wb))
+        dolu = [ad for ad in ("tk_no", "tk_sicil", "tk_sonuc_no", "tk_durum",
+                              "tk_bant") if _hucre(ws, ad)]
+        s.kontrol("Temizle girişleri ve sonucu boşalttı", not dolu, str(dolu))
+
+
+def _sorgula(app, wb, ws, no, sicil):
+    _ekrana_yaz(ws, {"tk_no": no, "tk_sicil": sicil})
+    y.calistir(app, wb, "modTakip.Sorgula")
+    app.EnableEvents = False        # HizliModKapa olaylari geri aciyor
+
+
+def _hucre(ws, ad):
+    return str(ws.Range(ad).Value or "")
+
+
+def _sayfa_metni(ws):
+    """Sayfada yazan her seyi tek metin olarak dondurur."""
+    return "\n".join(str(h) for satir in (ws.UsedRange.Value or ())
+                     for h in satir if h is not None)
+
+
+# ==========================================================================
 #  6. Form ekraninin GERCEK dugme yolu
 # ==========================================================================
 def _form_ekrani(s, app, o):
@@ -410,8 +513,9 @@ def _form_ekrani(s, app, o):
 
         s.kontrol("Gönder düğmesi başarı mesajı verdi",
                   mesaj.startswith("bilgi:") and "Öneri numaranız" in mesaj, mesaj)
-        s.kontrol("Onay bandı öneri numarasını gösteriyor",
-                  "PRJ-" in str(ws.Range("frm_bant").Value or ""),
+        s.kontrol("Onay bandı öneri numarasını gösteriyor, işareti bozulmadı",
+                  "PRJ-" in str(ws.Range("frm_bant").Value or "")
+                  and str(ws.Range("frm_bant").Value or "").startswith("✓"),
                   str(ws.Range("frm_bant").Value))
 
         # Gonderim sonrasi form kendiliginden temizlenmis olmali.

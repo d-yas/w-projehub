@@ -39,6 +39,7 @@ CIKTI = os.path.join(KOK, "cikti")
 VBA = os.path.join(KOK, "kaynak", "vba")
 
 ONERI = os.path.join(CIKTI, "ProjeOneri.xlsm")
+TAKIP = os.path.join(CIKTI, "ProjeTakip.xlsm")
 YONETIM = os.path.join(CIKTI, "yonetim", "ProjeYonetim.xlsm")
 
 OLE_IMZASI = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
@@ -142,18 +143,21 @@ def calistir():
     # 1. Dosyalar, sifreleme ve VBA projesi
     # ----------------------------------------------------------------------
     print("  · üretilen dosyalar ve şifreleme")
-    for ad, yol in (("ProjeOneri.xlsm", ONERI), ("ProjeYonetim.xlsm", YONETIM)):
+    kitaplar = (("ProjeOneri.xlsm", ONERI), ("ProjeTakip.xlsm", TAKIP),
+                ("ProjeYonetim.xlsm", YONETIM))
+    for ad, yol in kitaplar:
         s.kontrol(f"{ad} üretildi", os.path.exists(yol), yol)
 
-    if not (os.path.exists(ONERI) and os.path.exists(YONETIM)):
+    if not all(os.path.exists(yol) for _, yol in kitaplar):
         print("\n  Önce: python kur.py")
         return s.bitir()
 
-    with zipfile.ZipFile(ONERI) as z:
-        s.kontrol("ProjeOneri.xlsm bir VBA projesi içeriyor",
-                  "xl/vbaProject.bin" in set(z.namelist()))
-    s.kontrol("ProjeOneri.xlsm şifresiz (personel açabilmeli)",
-              zipfile.is_zipfile(ONERI))
+    # Personel kitaplari parolasizdir; ikisi de acilir acilmaz calismali.
+    for ad, yol in (("ProjeOneri.xlsm", ONERI), ("ProjeTakip.xlsm", TAKIP)):
+        s.kontrol(f"{ad} şifresiz (personel açabilmeli)", zipfile.is_zipfile(yol))
+        with zipfile.ZipFile(yol) as z:
+            s.kontrol(f"{ad} bir VBA projesi içeriyor",
+                      "xl/vbaProject.bin" in set(z.namelist()))
 
     # Yonetim kitabi VERI DEPOSUDUR: gizliligin siniri dosya parolasidir.
     # Sifreli bir OOXML dosyasi zip degil, OLE bilesik dosyadir.
@@ -201,6 +205,43 @@ def calistir():
     s.kontrol("Form sayfasında açılır liste kalmadı (birim ve israf kaldırıldı)",
               not ws.data_validations.dataValidation,
               str([dv.formula1 for dv in ws.data_validations.dataValidation]))
+
+    # --- Takip kitabi: tek ekran, VERI YOK -------------------------------
+    # Kitap parolasizdir; bir depo sayfasi buraya girerse herkesin onerisi
+    # herkesin elinde olur. Sorgu depoyu gizli ornekte okur (modTakip).
+    wb3 = load_workbook(TAKIP, keep_vba=True)
+    s.esit("Takip kitabı tek sayfadan oluşuyor", ["Takip"], wb3.sheetnames)
+    s.esit("Takip ekranı görünür", "visible", wb3["Takip"].sheet_state)
+
+    takip_adlari = {"tk_bant", "tk_no", "tk_sicil", "tk_sonuc_no", "tk_tarih",
+                    "tk_baslik", "tk_durum", "tk_guncelleme"}
+    s.kontrol("Takip alanlarının tamamı adlandırılmış aralık",
+              takip_adlari <= set(wb3.defined_names),
+              str(sorted(takip_adlari - set(wb3.defined_names))))
+
+    def _takip_hucresi(ad):
+        _, koordinat = next(iter(wb3.defined_names[ad].destinations))
+        return wb3["Takip"][koordinat.replace("$", "")]
+
+    if takip_adlari <= set(wb3.defined_names):
+        for ad in ("tk_no", "tk_sicil"):
+            h = _takip_hucresi(ad)
+            s.kontrol(f"Takip girişi kilitsiz: {ad}", h.protection.locked is False)
+            s.esit(f"Takip girişi metin biçimli (baştaki sıfır korunur): {ad}",
+                   "@", h.number_format)
+        for ad in ("tk_sonuc_no", "tk_durum", "tk_guncelleme"):
+            s.kontrol(f"Takip sonucu kilitli (elle yazılamaz): {ad}",
+                      _takip_hucresi(ad).protection.locked is not False)
+
+    import uret_takip
+    wt = wb3["Takip"]
+    cf_takip = {str(alan.sqref): len(kurallar)
+                for alan, kurallar in wt.conditional_formatting._cf_rules.items()}
+    gecmis_durum = (f"C{uret_takip.GECMIS_ILK}:"
+                    f"C{uret_takip.GECMIS_ILK + uret_takip.GECMIS_ADET - 1}")
+    s.esit("Takip: güncel durumda sekiz durumun rengi var", 8, cf_takip.get("C25"))
+    s.esit("Takip: geçmiş tablosunda sekiz durumun rengi var", 8,
+           cf_takip.get(gecmis_durum))
 
     uy = uret_yonetim_modulu()
 
@@ -283,6 +324,25 @@ def calistir():
            listeler["durum"],
            _vba_dizi(model, "Durumlar", _vba_metin_sabitleri(model)))
 
+    # Takip ekrani her durumun anlamini yazar; eksik bir durum orada bos
+    # bir hucre olarak gorunur.
+    aciklama = re.search(r"Function DurumAciklamasi\b(.*?)End Function",
+                         model, re.DOTALL)
+    model_sabitleri = _vba_metin_sabitleri(model)
+    aciklanan = {model_sabitleri.get(ad) for ad in
+                 re.findall(r"Case\s+(DURUM_\w+)\s*:", aciklama.group(1))} \
+        if aciklama else set()
+    s.esit("Her durumun takip ekranında bir açıklaması var",
+           set(listeler["durum"]), aciklanan)
+
+    takip = _bas_oku("modTakip.bas")
+    s.esit("Takip geçmiş tablosunun ilk satırı", uret_takip.GECMIS_ILK,
+           _vba_sabiti(takip, "GECMIS_ILK_SATIR"))
+    s.esit("Takip geçmiş tablosunun satır sayısı", uret_takip.GECMIS_ADET,
+           _vba_sabiti(takip, "GECMIS_AZAMI"))
+    s.esit("Takip sayfa adı — modUI.SAYFA_TAKIP", uret_takip.SAYFA_TAKIP,
+           _vba_metin_sabitleri(_bas_oku("modUI.bas")).get("SAYFA_TAKIP"))
+
     # Veri sayfasinin sutun sayisi ile modKonsolide'nin beklentisi
     s.esit("Veri sayfasının sütun sayısı", len(uret_yonetim.VERI_BASLIKLARI),
            _vba_sabiti(konsolide, "V_SUTUN_SAYISI"))
@@ -337,11 +397,11 @@ def calistir():
     # ----------------------------------------------------------------------
     print("  · VBA kaynak dosyaları")
     bas_dosyalari = [d for d in os.listdir(VBA) if d.endswith(".bas")]
-    s.kontrol("On VBA modülü var", len(bas_dosyalari) == 10,
+    s.kontrol("On bir VBA modülü var", len(bas_dosyalari) == 11,
               str(sorted(bas_dosyalari)))
 
     tanimli = set()
-    for tanim in (kur.oneri_tanimi(), kur.yonetim_tanimi()):
+    for tanim in (kur.oneri_tanimi(), kur.yonetim_tanimi(), kur.takip_tanimi()):
         tanimli |= {os.path.basename(m) for m in tanim["moduller"]}
     s.kontrol("Her VBA modülü en az bir kitaba giriyor",
               set(bas_dosyalari) <= tanimli,
@@ -373,7 +433,8 @@ def calistir():
                    "SaltOkunuraGec", "SaltOkunurMu", "YedekAl",
                    "KilidiAl", "KilidiBirak", "BayatKilidiTemizle",
                    "KaydetmeyiDene", "DepoOneDriveAltindaMi",
-                   "OneDriveAciklamasi", "TestDepoSayilari"):
+                   "OneDriveAciklamasi", "TestDepoSayilari",
+                   "OneriSatirlariniOku"):
         s.kontrol(f"modDepo.bas {yordam} tanımlıyor",
                   re.search(rf"(Sub|Function)\s+{yordam}\s*\(", depo) is not None)
 
@@ -429,6 +490,45 @@ def calistir():
               "modDepo.SaltOkunuraGec" in yonetim_kod)
     s.kontrol("Açılışta OneDrive konumu uyarılıyor",
               "DepoOneDriveAltindaMi" in yonetim_kod)
+
+    # --- Takip ekrani: gizlilik kurallari KODDA da durmali -----------------
+    # Ekibin karar notlari ve degerlendirenin kimligi oneri sahibine
+    # gosterilmez (bilincli karar). Bir yeniden duzenlemede bu sutunlardan
+    # biri ekrana eklenirse hicbir sey hata vermez; bu yuzden adiyla aranir.
+    takip_kod = "\n".join(satir for satir in takip.splitlines()
+                          if not satir.lstrip().startswith("'"))
+    for sutun in ("E_KARAR_NOTU", "E_DEGERLENDIREN_KULLANICI",
+                  "E_DEGERLENDIREN_BILGISAYAR"):
+        s.kontrol(f"modTakip {sutun} sütununu okumuyor (öneri sahibine gösterilmez)",
+                  sutun not in takip_kod)
+    s.kontrol("modTakip sorguda sicil numarasını denetliyor",
+              "O_SICIL_NO" in takip_kod)
+    s.kontrol("modTakip depoyu kitaba kopyalamıyor (DepoyuCek yok)",
+              "DepoyuCek" not in takip_kod)
+    s.kontrol("Liste ve takip ekranı durumu aynı kuraldan alıyor",
+              "modModel.OlaySonrasiDurum" in takip_kod
+              and "modModel.OlaySonrasiDurum" in konsolide)
+
+    with open(os.path.join(VBA, "ThisWorkbook_Takip.vba"), "r", encoding="utf-8") as f:
+        s.kontrol("Takip kitabı açılışta ekranı sıfırlıyor",
+                  "modTakip.EkraniSifirla" in f.read())
+
+    # --- VBA kaynagi ANSI kod sayfasinda saklanir --------------------------
+    # Turkce harfler cp1254'te vardir; "✓" ve "⚠" gibi isaretler yoktur. Kod
+    # satirina duz yazildiklarinda hucreye "?" olarak iner ve hicbir sey hata
+    # vermez (bantlarda boyle goruldu). Bu karakterler modTasarim.IsaretOnay /
+    # IsaretUyari ile uretilir. Yorum satirlari zararsizdir, elenir.
+    tasan = []
+    for d in sorted(os.listdir(VBA)):
+        if not d.endswith((".bas", ".vba")):
+            continue
+        for no, satir in enumerate(_bas_oku(d).splitlines(), start=1):
+            if satir.lstrip().startswith("'"):
+                continue
+            if any(not ch.encode("cp1254", "ignore") for ch in satir):
+                tasan.append(f"{d}:{no}")
+    s.kontrol("VBA kod satırlarında cp1254 dışı karakter yok (hücreye '?' iner)",
+              not tasan, ", ".join(tasan))
 
     return s.bitir()
 

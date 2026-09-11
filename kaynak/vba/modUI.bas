@@ -17,6 +17,7 @@ Public Const SAYFA_PANO As String = "Pano"
 Public Const SAYFA_LISTELER As String = "Listeler"
 Public Const SAYFA_PANOVERI As String = "PanoVeri"
 Public Const SAYFA_VERI As String = "Veri"
+Public Const SAYFA_TAKIP As String = "Takip"
 
 
 ' ###########################################################################

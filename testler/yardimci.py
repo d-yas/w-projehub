@@ -103,7 +103,7 @@ def yil():
 
 
 class Ortam:
-    r"""Gecici bir 'projeoneri\' paylasim klasoru ve icindeki iki kitap.
+    r"""Gecici bir 'projeoneri\' paylasim klasoru ve icindeki uc kitap.
 
     Ayri kayit dosyasi ve yil klasoru YOKTUR: butun veri yonetim kitabinin
     icindedir. Klasorde uretilen tek diger sey gunluk yedek kopyalardir.
@@ -115,6 +115,7 @@ class Ortam:
         self.yonetim = os.path.join(self.paylasim, "yonetim")
         self.yedek = os.path.join(self.yonetim, KLASOR_YEDEK)
         self.oneri_kitap = os.path.join(self.paylasim, "ProjeOneri.xlsm")
+        self.takip_kitap = os.path.join(self.paylasim, "ProjeTakip.xlsm")
         self.yonetim_kitap = os.path.join(self.yonetim, DOSYA_YONETIM)
 
     def yedek_dosyalar(self):
@@ -147,6 +148,7 @@ def ortam():
 
         for kaynak, hedef in (
             (os.path.join(CIKTI, "ProjeOneri.xlsm"), o.oneri_kitap),
+            (os.path.join(CIKTI, "ProjeTakip.xlsm"), o.takip_kitap),
             (os.path.join(CIKTI, "yonetim", DOSYA_YONETIM), o.yonetim_kitap),
         ):
             if not os.path.exists(kaynak):

@@ -58,6 +58,24 @@ End Function
 
 
 ' ---------------------------------------------------------------------------
+'  Bant isaretleri -- onay (U+2713) ve uyari (U+26A0)
+'
+'  VBA kaynagi ANSI kod sayfasinda saklanir (Turkce Windows'ta cp1254).
+'  Turkce harfler o sayfada vardir, bu iki isaret YOKTUR: kaynaga duz
+'  yazildiklarinda hucreye "?" olarak iner -- ekranlarda boyle goruldu.
+'  Bu yuzden karakter kodundan uretilirler. test_uretim.py kod satirlarinda
+'  cp1254 disi karakter kalmadigini denetler.
+' ---------------------------------------------------------------------------
+Public Function IsaretOnay() As String
+    IsaretOnay = ChrW$(&H2713)
+End Function
+
+Public Function IsaretUyari() As String
+    IsaretUyari = ChrW$(&H26A0)
+End Function
+
+
+' ---------------------------------------------------------------------------
 '  Durum renkleri
 ' ---------------------------------------------------------------------------
 Public Function DurumZeminHex(ByVal durum As String) As String

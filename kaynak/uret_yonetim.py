@@ -252,27 +252,10 @@ def _degerlendirme(wb):
 
 def _okuma_alani(ws, wb, satir, etiket_sutun, etiket_metni, ad, c1, c2,
                  yukseklik=None, coklu=False):
-    """Salt okunur bilgi alani.
-
-    Giris alanlarindan bilerek FARKLI gorunur: beyaz kutusu YOKTUR, zeminde
-    durur ve altinda ince bir cizgi vardir. "Buraya yazamazsin" bilgisi kilit
-    uyarisiyla degil gorunumle verilir; beyaz yuzey yalnizca yazilabilir
-    alanlara ayrilmistir.
-    """
-    e = u.etiket(ws, satir, etiket_sutun, etiket_metni)
-    if coklu:
-        e.alignment = u.hiza("left", "top")
-    ws.row_dimensions[satir].height = yukseklik or 24.0
-
-    h = u.birlestir(ws, satir, c1, satir, c2)
-    h.font = u.yazi(RENK["METIN_KOYU"], PT["GOVDE"], kalin=not coklu)
-    h.alignment = u.hiza("left", "top" if coklu else "center",
-                         kaydir=coklu, girinti=1)
-    for c in range(c1, c2 + 1):
-        hh = ws.cell(row=satir, column=c)
-        hh.border = u.Border(bottom=u.kenar(RENK["CIZGI_GRI"]))
-    wb.defined_names.add(_ad(ad, SAYFA_DEGERLENDIRME, c1, satir))
-    return h
+    """Salt okunur bilgi alani (bkz. uret_ortak.okuma_alani)."""
+    return u.okuma_alani(ws, wb, SAYFA_DEGERLENDIRME, satir, etiket_sutun,
+                         etiket_metni, ad, c1, c2, yukseklik=yukseklik,
+                         coklu=coklu)
 
 
 def _giris_alani(ws, wb, satir, etiket_sutun, etiket_metni, ad, c1, c2,

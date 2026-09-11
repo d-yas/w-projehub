@@ -250,10 +250,9 @@ Private Sub OlayiUygula(ByRef veri() As Variant, ByVal i As Long, _
                         ByVal olaylar As Variant, ByVal r As Long)
     Dim s As String
 
-    s = Trim$(CStr(olaylar(r, modDepo.E_YENI_DURUM) & ""))
-    If Len(s) > 0 Then
-        If modModel.DurumGecerliMi(s) Then veri(i, V_DURUM) = s
-    End If
+    ' Kural takip ekraniyla ORTAKTIR; bkz. modModel.OlaySonrasiDurum.
+    veri(i, V_DURUM) = modModel.OlaySonrasiDurum(CStr(veri(i, V_DURUM)), _
+                                                 olaylar(r, modDepo.E_YENI_DURUM))
 
     s = CStr(olaylar(r, modDepo.E_KARAR_NOTU) & "")
     If Len(s) > 0 Then veri(i, V_KARAR_NOTU) = s

@@ -23,6 +23,7 @@ DIKEY, YATAY = 1, 2
 GORUNUMLER = [
     ("oneri", "Giriş", "A1:G16", DIKEY),
     ("oneri", "Öneri Formu", "A1:G34", DIKEY),
+    ("takip", "Takip", "A1:G44", DIKEY),
     ("yonetim", "Giriş", "A1:G16", DIKEY),
     ("yonetim", "Liste", "A1:G22", YATAY),
     ("yonetim", "Değerlendirme", "A1:G48", DIKEY),
@@ -89,6 +90,7 @@ def calistir(hedef_klasor):
             # bulamaz ve otuz saniye bekleyip pes ederdi.
             acik = {
                 "oneri": y.ac(app, o.oneri_kitap),
+                "takip": y.ac(app, o.takip_kitap),
                 "yonetim": y.ac(app, o.yonetim_kitap),
             }
             wb = acik["yonetim"]
@@ -109,6 +111,15 @@ def calistir(hedef_klasor):
             y.calistir(app, wb, "modKonsolide.OnerileriYenile")
             app.EnableEvents = False
             y.calistir(app, wb, "modDegerlendirme.OneriyiAc", numaralar[0])
+
+            # Takip ekrani: ilk onerinin sahibi kendi onerisini sorguluyor.
+            ws_takip = acik["takip"].Worksheets("Takip")
+            y.korumasiz(ws_takip)
+            ws_takip.Range("tk_no").Value = numaralar[0]
+            ws_takip.Range("tk_sicil").Value = ornekler[0][1]
+            y.calistir(app, acik["takip"], "modTakip.Sorgula")
+            app.EnableEvents = False
+            del ws_takip         # birakilmayan vekil Excel'i kapanmaz yapar
 
             for kitap_anahtar, sayfa, aralik, yon in GORUNUMLER:
                 ad = f"{kitap_anahtar}-{sayfa.replace(' ', '-')}.pdf"

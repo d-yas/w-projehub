@@ -323,6 +323,88 @@ End Sub
 
 
 ' ###########################################################################
+'  TAKIP SORGUSU -- tek bir onerinin satirlari, butun depo DEGIL
+'
+'  Takip kitabi (ProjeTakip.xlsm) PAROLASIZDIR ve personelin elindedir. Bu
+'  yuzden DepoyuCek'in yaptigi gibi depo sayfalari oraya KOPYALANMAZ: depo
+'  gizli ornekte salt okunur acilir, yalnizca istenen onerinin satirlari
+'  ayiklanip dondurulur, gerisi o ornekle birlikte kapanir. Hangi alanlarin
+'  ekrana cikacagina modTakip karar verir.
+' ###########################################################################
+
+' oneri   -- O_* duzeninde (1 To 1, 1 To O_SUTUN_SAYISI); numara yoksa Empty.
+' olaylar -- o onerinin olay satirlari SATIR SIRASIYLA (= zaman sirasiyla),
+'            E_* duzeninde (1 To n, 1 To E_SUTUN_SAYISI); olay yoksa Empty.
+Public Sub OneriSatirlariniOku(ByVal oneriNo As String, ByRef oneri As Variant, _
+                               ByRef olaylar As Variant)
+    Dim app As Object, wb As Object
+    Dim aciklama As String, hataMetni As String
+
+    oneri = Empty
+    olaylar = Empty
+
+    Set app = GizliExcelAc()
+    On Error GoTo Hata
+
+    Set wb = DepoAc(app, True, aciklama)
+    If wb Is Nothing Then
+        Err.Raise vbObjectError + 956, "modDepo.OneriSatirlariniOku", aciklama
+    End If
+
+    ' Numara birden fazla satirda geciyorsa konsolidasyon gibi ILK satir
+    ' esas alinir; boylece ekip ile oneri sahibi ayni kaydi gorur.
+    oneri = SatirlariAyikla(TabloOku(wb.Worksheets(SAYFA_ONERILER), O_SUTUN_SAYISI), _
+                            O_ONERI_NO, O_SUTUN_SAYISI, oneriNo, True)
+    If Not IsEmpty(oneri) Then
+        olaylar = SatirlariAyikla(TabloOku(wb.Worksheets(SAYFA_OLAYLAR), E_SUTUN_SAYISI), _
+                                  E_ONERI_NO, E_SUTUN_SAYISI, oneriNo, False)
+    End If
+
+    KitapKapat wb, False
+    GizliExcelKapat app
+    Exit Sub
+
+Hata:
+    hataMetni = Err.Description
+    oneri = Empty
+    olaylar = Empty
+    KitapKapat wb, False
+    GizliExcelKapat app
+    Err.Raise vbObjectError + 957, "modDepo.OneriSatirlariniOku", hataMetni
+End Sub
+
+' Bir depo tablosundan anahtar sutunu oneriNo olan satirlari, SATIR SIRASIYLA
+' ve ayni sutun duzeninde yeni bir diziye kopyalar. Eslesme yoksa Empty doner.
+Private Function SatirlariAyikla(ByVal tablo As Variant, ByVal anahtarSutun As Long, _
+                                 ByVal sutunSayisi As Long, ByVal oneriNo As String, _
+                                 ByVal yalnizcaIlk As Boolean) As Variant
+    Dim eslesen As New Collection
+    Dim sonuc() As Variant
+    Dim r As Long, c As Long, i As Long
+
+    If IsEmpty(tablo) Then Exit Function
+
+    For r = LBound(tablo, 1) To UBound(tablo, 1)
+        If StrComp(Trim$(CStr(tablo(r, anahtarSutun) & "")), oneriNo, vbTextCompare) = 0 Then
+            eslesen.Add r
+            If yalnizcaIlk Then Exit For
+        End If
+    Next r
+    If eslesen.Count = 0 Then Exit Function
+
+    ReDim sonuc(1 To eslesen.Count, 1 To sutunSayisi)
+    For i = 1 To eslesen.Count
+        r = eslesen(i)
+        For c = 1 To sutunSayisi
+            sonuc(i, c) = tablo(r, c)
+        Next c
+    Next i
+
+    SatirlariAyikla = sonuc
+End Function
+
+
+' ###########################################################################
 '  GIZLI EXCEL ORNEGI
 ' ###########################################################################
 

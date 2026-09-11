@@ -93,3 +93,48 @@ Public Function BekliyorMu(ByVal durum As String) As Boolean
             BekliyorMu = False
     End Select
 End Function
+
+
+' ---------------------------------------------------------------------------
+'  Bir olay uygulandiktan sonraki durum -- listenin ve takip ekraninin
+'  ORTAK kurali.
+'
+'  Bos ya da gecersiz bir durum alani durumu DEGISTIRMEZ: yalnizca not ekleyen
+'  bir olay onceki durumu korur. Liste (modKonsolide) ve personelin takip
+'  ekrani (modTakip) kurali buradan alir; ayri ayri yazilsaydi ekip ile oneri
+'  sahibi ayni oneri icin farkli durum gorebilirdi.
+' ---------------------------------------------------------------------------
+Public Function OlaySonrasiDurum(ByVal mevcut As String, ByVal yeniDurum As Variant) As String
+    Dim s As String
+
+    s = Trim$(CStr(yeniDurum & ""))
+    If Len(s) > 0 Then
+        If DurumGecerliMi(s) Then
+            OlaySonrasiDurum = s
+            Exit Function
+        End If
+    End If
+    OlaySonrasiDurum = mevcut
+End Function
+
+
+' ---------------------------------------------------------------------------
+'  Durumun oneri sahibine gosterilen anlami (takip ekrani).
+'
+'  Kisa tutulur: takip ekraninda tek satira sigmalidir. Her durumun bir
+'  karsiligi olmak zorundadir; test_uretim.py eksik durumu yakalar. Case
+'  basina TEK sabit yazilir, test o sekilde okur.
+' ---------------------------------------------------------------------------
+Public Function DurumAciklamasi(ByVal durum As String) As String
+    Select Case durum
+        Case DURUM_YENI:            DurumAciklamasi = "Alındı; değerlendirme sırasını bekliyor."
+        Case DURUM_DEGERLENDIRMEDE: DurumAciklamasi = "Değerlendirme ekibi inceliyor."
+        Case DURUM_PLANLANDI:       DurumAciklamasi = "Uygun bulundu; uygulama planlanıyor."
+        Case DURUM_PILOT:           DurumAciklamasi = "Sınırlı bir alanda deneniyor."
+        Case DURUM_OLCUM:           DurumAciklamasi = "Denemenin sonuçları ölçülüyor."
+        Case DURUM_STANDART:        DurumAciklamasi = "Kalıcı olarak uygulamaya alındı."
+        Case DURUM_BEKLEMEDE:       DurumAciklamasi = "Şimdilik bekletiliyor."
+        Case DURUM_REDDEDILDI:      DurumAciklamasi = "Uygulanmayacak; gerekçe için ekibe başvurun."
+        Case Else:                  DurumAciklamasi = ""
+    End Select
+End Function
