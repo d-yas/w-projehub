@@ -252,7 +252,7 @@ def calistir():
                {"Giriş", "Liste", "Değerlendirme", "Pano",
                 "Oneriler", "Olaylar", "Veri", "PanoVeri", "Listeler"},
                set(wb2.sheetnames))
-        s.esit("Pano kitaptaki ilk sayfa", "Pano", wb2.sheetnames[0])
+        s.esit("Liste kitaptaki ilk sayfa", "Liste", wb2.sheetnames[0])
         s.kontrol("Çalışma ve depo sayfaları girişten önce gizli",
                   all(wb2[a].sheet_state == "veryHidden"
                       for a in ("Liste", "Değerlendirme", "Pano",
@@ -311,6 +311,13 @@ def calistir():
     ):
         s.esit(f"Liste koordinatı — {aciklama}", py_deger,
                _vba_sabiti(konsolide, vba_ad))
+
+    # Oturum LISTE ile acilir (ekibin gunluk isi); Pano bir dugme uzaktadir.
+    giris = re.search(r"Public Sub SistemeGir\b(.*?)\nEnd Sub", konsolide, re.DOTALL)
+    s.kontrol("Yönetim oturumu Liste ekranıyla açılıyor",
+              giris is not None and re.search(
+                  r"OturumAc\s+Array\(.*?\),\s*modUI\.SAYFA_LISTE",
+                  giris.group(1), re.DOTALL) is not None)
 
     degerlendirme = _bas_oku("modDegerlendirme.bas")
     s.esit("Geçmiş tablosunun ilk satırı", uret_yonetim.DEG_GECMIS_ILK,

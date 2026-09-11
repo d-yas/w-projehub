@@ -136,7 +136,8 @@ Kurulumdan sonra bir kez elle:
 - [ ] İki kullanıcı aynı anda gönderiyor, ikisi de ayrı numara alıyor.
 - [ ] Yönetim kitabı ekip hesabıyla açılıyor, başlıkta **[Salt Okunur]**
       yazıyor. ("Yine de Düzenle" şeridine **basmayın.**)
-- [ ] Pano doluyor; *Liste → Önerileri Yenile* gönderimleri gösteriyor.
+- [ ] *Sisteme Gir* → **Liste** açılıyor ve gönderimleri gösteriyor;
+      *Pano* düğmesi panoyu dolu getiriyor.
 - [ ] Satıra çift tıkla → durum + karar notu → *Değerlendirmeyi Kaydet*
       çalışıyor.
 - [ ] Takip ekranında yeniden sorgulayınca yeni durum geliyor; karar notu

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """ProjeYonetim.xlsm -- Değerlendirme ekibinin kitabinin sayfa kurulumu.
 
-Dort ekran: Giris, Pano, Liste, Degerlendirme. Pano hem kitaptaki ILK
-sayfadir hem de sifre girildikten sonra acilan ekrandir; Liste bir dugme
+Dort ekran: Giris, Liste, Pano, Degerlendirme. Liste hem kitaptaki ILK
+sayfadir hem de sifre girildikten sonra acilan ekrandir; Pano bir dugme
 uzaktadir.
 
 Ayrica dort gizli calisma sayfasi. Ikisi VERI DEPOSUDUR ve sistemin butun
@@ -647,12 +647,12 @@ def kitap_uret(hedef_yol, listeler):
     wb = Workbook()
     wb.remove(wb.active)
 
-    # Sayfa SIRASI ekrandaki sekme sirasidir: Pano en basta durur, oturum
+    # Sayfa SIRASI ekrandaki sekme sirasidir: Liste en basta durur, oturum
     # acildiginda ilk gorunen sekme odur. Giris ekrani ikinci sirada olsa da
     # kitap acildiginda gorunur olan tek sayfa yine odur.
-    _pano(wb)
-    giris = _giris(wb)
     _liste(wb)
+    giris = _giris(wb)
+    _pano(wb)
     _degerlendirme(wb)
     _depo_sayfasi(wb, SAYFA_ONERILER, ONERILER_BASLIKLARI)
     _depo_sayfasi(wb, SAYFA_OLAYLAR, OLAYLAR_BASLIKLARI)

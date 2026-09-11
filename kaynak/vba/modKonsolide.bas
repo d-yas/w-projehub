@@ -60,19 +60,24 @@ Public Const LISTE_AZAMI_SATIR As Long = 2000
 
 ' "Sisteme Gir" dugmesi -- Giris sayfasi
 '
-' Oturum PANO ile acilir: ekip once genel resmi gorur, ayrintiya listeden
-' iner. Liste bir dugme uzaktadir.
+' Oturum LISTE ile acilir: ekibin gunluk isi siradaki onerileri
+' degerlendirmektir ve liste bekleyenleri ustte gosterir. Pano bir dugme
+' uzaktadir.
 Public Sub SistemeGir()
     Dim hataMetni As String
 
     If Not modUI.SifreDogrula(modAyar.SIFRE_YONETIM, "Proje Öneri Yönetimi") Then Exit Sub
-    modUI.OturumAc Array(modUI.SAYFA_PANO, modUI.SAYFA_LISTE, _
-                         modUI.SAYFA_DEGERLENDIRME), modUI.SAYFA_PANO
+    modUI.OturumAc Array(modUI.SAYFA_LISTE, modUI.SAYFA_PANO, _
+                         modUI.SAYFA_DEGERLENDIRME), modUI.SAYFA_LISTE
 
     On Error GoTo Hata
     modUI.HizliModAc
     OzetYaz YerelYenile()
     modUI.HizliModKapa
+
+    ' Liste EKRANDAYKEN ve ScreenUpdating kapaliyken yazildi; dondurulmus
+    ' bolmelerden biri eski goruntusuyle kalabilir (bkz. modUI.YenidenCiz).
+    modUI.YenidenCiz
     Exit Sub
 
 Hata:
